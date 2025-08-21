@@ -29,7 +29,7 @@ Team Size: 4 | Hackathon MVP
 | Auth              | JWT                                   |
 | AI / Verification | OpenAI GPT, LangChain, FFmpeg         |
 | Deployment        | Docker, Heroku / Vercel               |
-| Realtime Updates  | WebSockets (Socket.io)                |
+| Realtime Updates  | WebSockets (FastAPI native)           |
 
 ---
 
