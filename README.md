@@ -32,6 +32,24 @@ Team Size: 4 | Hackathon MVP
 | Realtime Updates  | WebSockets (Socket.io)                |
 
 ---
+## Setup Instructions
 
-## Project Structure
+### Backend
+1. Navigate to the backend folder:
+```bash
+cd backend
+
+# Windows
+..\venv\Scripts\activate
+# Linux / Mac
+source ../venv/bin/activate
+pip install -r requirements.txt
+
+--- 
+### Frontend
+cd frontend
+
+npm install
+
+npm run dev
 
