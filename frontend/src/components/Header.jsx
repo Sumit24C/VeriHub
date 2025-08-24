@@ -29,11 +29,15 @@ export const Header = ({ activeSection, onSectionChange, analysisHistory = [] })
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   useEffect(() => {
-    // Check localStorage for login status
     const loggedIn = localStorage.getItem("isLoggedIn");
     if (loggedIn === "true") {
       setIsLoggedIn(true);
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
     }
   }, []);
 
@@ -52,7 +56,10 @@ export const Header = ({ activeSection, onSectionChange, analysisHistory = [] })
 
   const confirmLogout = () => {
     setIsLoggedIn(false);
+    setUser(null);
     localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     setShowLogoutConfirm(false);
     toast({ title: "Logged out", description: "You have been logged out.", variant: "default" });
   };
@@ -75,10 +82,23 @@ export const Header = ({ activeSection, onSectionChange, analysisHistory = [] })
           </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-6">
-          {isLoggedIn ? (
+          {isLoggedIn && user ? (
             <>
               <Button variant="outline" size="sm" className="border-white text-white bg-white bg-opacity-20 rounded-lg px-4 py-1 transition md:px-6 md:py-2" onClick={() => navigate("/history")}>History</Button>
-              <span className="text-white font-medium">Welcome, User!</span>
+              <div className="flex items-center gap-2">
+                {user.profile_image_url ? (
+                  <img src={user.profile_image_url} alt="Profile" className="w-8 h-8 rounded-full border-2 border-white" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 border-white">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="12" fill="#e5e7eb" />
+                      <circle cx="12" cy="10" r="4" fill="#cbd5e1" />
+                      <rect x="6" y="16" width="12" height="4" rx="2" fill="#cbd5e1" />
+                    </svg>
+                  </div>
+                )}
+                <span className="text-white font-medium">{user.username || user.email}</span>
+              </div>
               <Button variant="outline" size="sm" className="border-white text-white bg-white bg-opacity-20 rounded-lg px-4 py-1 transition md:px-6 md:py-2" onClick={handleLogout}>Logout</Button>
               {showLogoutConfirm && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
