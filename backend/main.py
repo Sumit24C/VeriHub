@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, status, Depends
-from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from database import connect_to_mongo, close_mongo_connection, get_database
@@ -24,17 +23,7 @@ async def lifespan(app: FastAPI):
     finally:
         await close_mongo_connection()
 
-
-
 app = FastAPI(title="VeriHub API", version="1.0.0", lifespan=lifespan)
-# Enable CORS for frontend development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Change to ["http://localhost:5173"] for more security
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
 
 @app.get("/")
 async def root():
