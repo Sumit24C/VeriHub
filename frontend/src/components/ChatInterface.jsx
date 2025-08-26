@@ -78,39 +78,114 @@ const ChatInterface = () => {
     setFiles((prev) => prev.filter((f) => f !== fileToRemove));
   };
 
+  // ---------------------- File upload to backend ----------------------
+  const uploadFilesToBackend = async (files) => {
+    const uploadPromises = files.map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'verihub/chat-uploads');
+
+      try {
+        const response = await fetch('http://localhost:8000/uploads/upload/single', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        const result = await response.json();
+        return {
+          success: true,
+          originalFile: file,
+          uploadedData: result.file_data,
+        };
+      } catch (error) {
+        console.error(`Upload error for ${file.name}:`, error);
+        return {
+          success: false,
+          originalFile: file,
+          error: error.message,
+        };
+      }
+    });
+
+    return Promise.all(uploadPromises);
+  };
+
   // ---------------------- Messaging ----------------------
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
     if (!message.trim() && files.length === 0) return;
 
-    const userMessage = {
-      id: Date.now(),
-      type: 'user',
-      content: message.trim(),
-      files: files.length > 0 ? [...files] : null,
-      timestamp: new Date(),
-    };
-
-    setConversation((prev) => [...prev, userMessage]);
-    setMessage('');
-    setFiles([]);
     setIsLoading(true);
 
     try {
-      // simulate API
+      // Upload files to backend if any
+      let uploadedFiles = [];
+      if (files.length > 0) {
+        toast({
+          title: 'Uploading files...',
+          description: `Uploading ${files.length} file(s) to cloud storage`,
+        });
+
+        const uploadResults = await uploadFilesToBackend(files);
+        
+        // Handle upload results
+        const successfulUploads = uploadResults.filter(result => result.success);
+        const failedUploads = uploadResults.filter(result => !result.success);
+
+        if (failedUploads.length > 0) {
+          toast({
+            title: 'Some files failed to upload',
+            description: `${failedUploads.length} file(s) could not be uploaded`,
+            variant: 'destructive',
+          });
+        }
+
+        if (successfulUploads.length > 0) {
+          toast({
+            title: 'Files uploaded successfully',
+            description: `${successfulUploads.length} file(s) uploaded to cloud storage`,
+          });
+          
+          uploadedFiles = successfulUploads.map(result => ({
+            ...result.originalFile,
+            cloudinaryData: result.uploadedData,
+            uploaded: true,
+          }));
+        }
+      }
+
+      const userMessage = {
+        id: Date.now(),
+        type: 'user',
+        content: message.trim(),
+        files: uploadedFiles.length > 0 ? uploadedFiles : null,
+        timestamp: new Date(),
+      };
+
+      setConversation((prev) => [...prev, userMessage]);
+      setMessage('');
+      setFiles([]);
+
+      // simulate API response
       await new Promise((r) => setTimeout(r, 1200));
 
       const assistantMessage = {
         id: Date.now() + 1,
         type: 'assistant',
-        content:
-          'I received your message and analyzed the content. This is a demo response from VeriHub assistant. In the full version, I would provide detailed verification analysis.',
+        content: uploadedFiles.length > 0 
+          ? `I received your message and ${uploadedFiles.length} uploaded file(s). The files have been stored securely in cloud storage and are ready for analysis. This is a demo response from VeriHub assistant.`
+          : 'I received your message and analyzed the content. This is a demo response from VeriHub assistant. In the full version, I would provide detailed verification analysis.',
         timestamp: new Date(),
       };
 
       setConversation((prev) => [...prev, assistantMessage]);
     } catch (err) {
+      console.error('Submit error:', err);
       toast({
         title: 'Error',
         description: 'Failed to send message. Please try again.',
@@ -146,24 +221,6 @@ const ChatInterface = () => {
 
           {/* Center panel: light background + border to make it stand out */}
           <div className="w-full max-w-2xl p-6 rounded-2xl bg-surface/60 border border-muted shadow-sm">
-            {/* File Preview - Centered */}
-            {files.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4 justify-center">
-                {files.map((file, index) => (
-                  <div key={index} className="flex items-center gap-2 bg-muted px-3 py-2 rounded-lg text-sm">
-                    {getFileIcon(file)}
-                    <span className="truncate max-w-32">{file.name}</span>
-                    <button
-                      onClick={() => removeFile(file)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Input Container inside center panel */}
             <form onSubmit={handleSubmit} className="space-y-3">
               <Textarea
@@ -259,6 +316,9 @@ const ChatInterface = () => {
                               {getFileIcon(file)}
                               <span className="truncate max-w-32">{file.name}</span>
                               <span className="text-muted-foreground">({formatFileSize(file.size)})</span>
+                              {file.uploaded && (
+                                <span className="text-green-600 font-medium">✓ Uploaded</span>
+                              )}
                             </div>
                           ))}
                         </div>
