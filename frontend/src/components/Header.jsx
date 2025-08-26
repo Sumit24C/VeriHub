@@ -1,128 +1,67 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Shield, BarChart3, Search, AlertTriangle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
+import { LogOut, User } from "lucide-react";
 
-export const Header = ({ activeSection, onSectionChange, analysisHistory = [] }) => {
-  const navigationItems = [];
-
-  const NavigationContent = () => (
-    <nav className="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-1">
-      {navigationItems.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Button
-            key={item.id}
-            variant={activeSection === item.id ? "default" : "ghost"}
-            onClick={() => onSectionChange(item.id)}
-            className="flex items-center gap-2 w-full md:w-auto justify-start md:justify-center"
-          >
-            <Icon className="h-4 w-4" />
-            {item.label}
-          </Button>
-        );
-      })}
-    </nav>
-  );
-
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+export default function Header() {
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn");
-    if (loggedIn === "true") {
-      setIsLoggedIn(true);
-      const userData = localStorage.getItem("user");
-      if (userData) {
-        setUser(JSON.parse(userData));
-      }
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      setUser(JSON.parse(userData));
     }
   }, []);
 
-  const handleLogin = () => {
-    // Simulate login (replace with backend logic later)
-    setIsLoggedIn(true);
-    localStorage.setItem("isLoggedIn", "true");
-  };
-
-  const { toast } = useToast();
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
   const handleLogout = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = () => {
-    setIsLoggedIn(false);
-    setUser(null);
-    localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("access_token");
+    localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("user");
-    setShowLogoutConfirm(false);
-    toast({ title: "Logged out", description: "You have been logged out.", variant: "default" });
+    setUser(null);
+    navigate("/login");
   };
 
-  const cancelLogout = () => {
-    setShowLogoutConfirm(false);
+  const handleLogin = () => {
+    navigate("/login");
   };
-
-  const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 shadow-lg">
-      <div className="container mx-auto px-4 py-2 flex flex-row items-center justify-between w-full gap-4 flex-nowrap">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 bg-white bg-opacity-20 rounded-xl shadow">
-            <Shield className="h-5 w-5 text-white" />
-          </div>
-          <h1 className="text-lg sm:text-xl font-bold text-white whitespace-nowrap">
-            FactGuard AI
-          </h1>
+    <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <div className="flex items-center justify-between px-6 py-3">
+        <div className="flex items-center space-x-2">
+          <h1 className="text-xl font-semibold text-gray-900">VeriHub AI</h1>
         </div>
-        <div className="flex items-center gap-2 md:gap-6">
-          {isLoggedIn && user ? (
+        
+        <div className="flex items-center space-x-3">
+          {user ? (
             <>
-              <Button variant="outline" size="sm" className="border-white text-white bg-white bg-opacity-20 rounded-lg px-4 py-1 transition md:px-6 md:py-2" onClick={() => navigate("/history")}>History</Button>
-              <div className="flex items-center gap-2">
-                {user.profile_image_url ? (
-                  <img src={user.profile_image_url} alt="Profile" className="w-8 h-8 rounded-full border-2 border-white" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 border-white">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="12" cy="12" r="12" fill="#e5e7eb" />
-                      <circle cx="12" cy="10" r="4" fill="#cbd5e1" />
-                      <rect x="6" y="16" width="12" height="4" rx="2" fill="#cbd5e1" />
-                    </svg>
-                  </div>
-                )}
-                <span className="text-white font-medium">{user.username || user.email}</span>
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <User className="h-4 w-4" />
+                <span>{user.username}</span>
               </div>
-              <Button variant="outline" size="sm" className="border-white text-white bg-white bg-opacity-20 rounded-lg px-4 py-1 transition md:px-6 md:py-2" onClick={handleLogout}>Logout</Button>
-              {showLogoutConfirm && (
-                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-                  <div className="bg-white rounded-lg shadow-xl p-6 w-80 text-center">
-                    <h3 className="text-lg font-bold mb-4 text-blue-700">Confirm Logout</h3>
-                    <p className="mb-6 text-gray-700">Are you sure you want to logout?</p>
-                    <div className="flex justify-center gap-4">
-                      <Button variant="outline" size="sm" className="px-4" onClick={cancelLogout}>No</Button>
-                      <Button variant="default" size="sm" className="px-4" onClick={confirmLogout}>Yes</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Logout
+              </Button>
             </>
           ) : (
-            <>
-              <Button variant="outline" size="sm" className="border-white text-white bg-white bg-opacity-20 rounded-lg px-4 py-1 transition md:px-6 md:py-2" onClick={() => navigate("/login")}>Login</Button>
-              <Button variant="default" size="sm" className="bg-white text-blue-600 font-bold rounded-lg px-4 py-1 hover:bg-blue-100 transition md:px-6 md:py-2" onClick={() => navigate("/signup")}>Signup</Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogin}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              Login
+            </Button>
           )}
         </div>
       </div>
     </header>
   );
-};
-
-export default Header;
+}
