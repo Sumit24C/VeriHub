@@ -4,21 +4,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from models import UserInDB, UserResponse
-from database import get_database
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-change-this")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+from app.models.user import UserInDB, UserResponse
+from app.core.database import get_database
+from app.core.config import settings
+import warnings
 
 # Suppress bcrypt warnings
-import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="passlib")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -37,7 +28,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 async def get_user_by_email(email: str) -> Optional[UserInDB]:
@@ -72,7 +63,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     )
     
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception

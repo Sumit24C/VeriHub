@@ -17,11 +17,6 @@ class UserResponse(BaseModel):
     is_active: bool
     date_joined: datetime
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    user: UserResponse
-
 class UserInDB(BaseModel):
     username: str
     email: str

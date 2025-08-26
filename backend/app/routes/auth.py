@@ -1,46 +1,22 @@
-from fastapi import FastAPI, HTTPException, status, Depends
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime, timedelta
-from contextlib import asynccontextmanager
-from database import connect_to_mongo, close_mongo_connection, get_database
-from models import UserCreate, UserLogin, Token, UserResponse, UserInDB
-from auth import (
+from app.models.user import UserCreate, UserLogin, UserResponse, UserInDB
+from app.models.auth import Token
+from app.auth.auth_service import (
     get_password_hash, 
     authenticate_user, 
     create_access_token, 
     get_current_user,
     get_user_by_email,
     get_user_by_username,
-    user_to_response,
-    ACCESS_TOKEN_EXPIRE_MINUTES
+    user_to_response
 )
+from app.core.database import get_database
+from app.core.config import settings
 
-# FastAPI lifespan event
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await connect_to_mongo()
-    try:
-        yield
-    finally:
-        await close_mongo_connection()
+router = APIRouter()
 
-
-
-app = FastAPI(title="VeriHub API", version="1.0.0", lifespan=lifespan)
-# Enable CORS for frontend development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Change to ["http://localhost:5173"] for more security
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-@app.get("/")
-async def root():
-    return {"message": "Welcome to VeriHub API!", "status": "success"}
-
-@app.post("/signup", response_model=Token)
+@router.post("/signup", response_model=Token)
 async def signup(user: UserCreate):
     db = get_database()
     
@@ -75,7 +51,7 @@ async def signup(user: UserCreate):
     user_id = str(result.inserted_id)
     
     # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
@@ -84,13 +60,13 @@ async def signup(user: UserCreate):
     user_in_db = UserInDB(**user_data)
     user_response = user_to_response(user_in_db, user_id)
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user_response
-    }
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
 
-@app.post("/signin", response_model=Token)
+@router.post("/signin", response_model=Token)
 async def signin(user: UserLogin):
     # Authenticate user
     authenticated_user = await authenticate_user(user.email, user.password)
@@ -109,7 +85,7 @@ async def signin(user: UserLogin):
         )
     
     # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": authenticated_user.email}, expires_delta=access_token_expires
     )
@@ -122,13 +98,13 @@ async def signin(user: UserLogin):
     # Create user response
     user_response = user_to_response(authenticated_user, user_id)
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user_response
-    }
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
 
-@app.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserResponse)
 async def get_me(current_user: UserInDB = Depends(get_current_user)):
     # Get user ID from database
     db = get_database()
@@ -137,7 +113,7 @@ async def get_me(current_user: UserInDB = Depends(get_current_user)):
     
     return user_to_response(current_user, user_id)
 
-@app.get("/protected")
+@router.get("/protected")
 async def protected_route(current_user: UserInDB = Depends(get_current_user)):
     return {
         "message": f"Hello {current_user.username}!",
