@@ -100,7 +100,7 @@ class VerificationCheckPrompts:
 
         Return ONLY valid JSON matching the ImageCheck schema.
         """
-
+    @staticmethod
     def img_verification_user(claim: str, img_url: str, image_metadata: list) -> str:
         # Format the metadata more clearly for the LLM
         

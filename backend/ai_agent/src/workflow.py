@@ -105,6 +105,7 @@ class Workflow:
             tools_used.append("reverse_image_search")
             
             if not image_search_results:
+                print("no img result")
                 return self._create_img_error_response(
                     state=state,
                     llm_generated_claim=llm_generated_claim,
@@ -133,6 +134,7 @@ class Workflow:
                         }
                         image_verification_result.append(structured_data)
             print("Done generating verification results")
+            
             # Verification LLM
             messages = [
                 SystemMessage(content=self.prompts.IMAGE_VERIFICATION_SYSTEM),
