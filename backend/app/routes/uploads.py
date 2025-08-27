@@ -47,7 +47,7 @@ async def upload_single_file(
             raise HTTPException(status_code=500, detail=result["error"])
         
         logger.info(f"File uploaded successfully: {file.filename}")
-        
+        print("result: ", result)
         return {
             "message": "File uploaded successfully",
             "file_data": result
