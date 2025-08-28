@@ -1,21 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Send, Paperclip, X, FileText, Image, User, Bot } from 'lucide-react';
+import { Send, Paperclip, X, FileText, Image, User, Bot, Plus, Edit2 } from 'lucide-react';
 
 const ChatInterface = () => {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [conversation, setConversation] = useState([]);
+  const [chatId, setChatId] = useState(null);
+  const [chats, setChats] = useState([]);
+  const [isRenaming, setIsRenaming] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false); // hide internal sidebar; using global one
   const { toast } = useToast();
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const messagesRef = useRef(null);
+  const navigate = useNavigate();
 
   // ---------------------- Helpers ----------------------
   const formatFileSize = (bytes) => {
@@ -48,6 +55,92 @@ const ChatInterface = () => {
   useEffect(() => {
     adjustTextareaHeight();
   }, [message]);
+
+  // ---------------------- Chat session init & load ----------------------
+  useEffect(() => {
+    const initializeChat = async () => {
+      try {
+        console.log('[Chat] init start');
+        // Try restore existing chatId
+        let existing = localStorage.getItem('verihub_chat_id');
+        if (!existing) {
+          // Create new chat
+          console.log('[Chat] no existing chatId, creating...');
+          const res = await fetch('http://localhost:8000/chats', {
+            method: 'POST',
+          });
+          if (!res.ok) throw new Error('Failed to create chat');
+          const data = await res.json();
+          existing = data.chatId;
+          localStorage.setItem('verihub_chat_id', existing);
+          console.log('[Chat] created chatId', existing);
+        }
+        setChatId(existing);
+
+        // Load history
+        console.log('[Chat] fetching history for', existing);
+        const historyRes = await fetch(`http://localhost:8000/chats/${existing}`);
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          console.log('[Chat] history loaded', historyData);
+          // Transform backend messages to local shape if needed
+          const mapped = (historyData.messages || []).map((m, idx) => ({
+            id: m.timestamp ? new Date(m.timestamp).getTime() + idx : Date.now() + idx,
+            type: m.role === 'assistant' ? 'assistant' : 'user',
+            content: m.content,
+            files: m.files || null,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+          }));
+          setConversation(mapped);
+        }
+        // Load chats list
+        try {
+          console.log('[Chat] fetching chats list');
+          const listRes = await fetch('http://localhost:8000/chats');
+          if (listRes.ok) {
+            const data = await listRes.json();
+            console.log('[Chat] chats list', data);
+            setChats(data);
+          }
+        } catch {}
+        console.log('[Chat] init done');
+      } catch (e) {
+        console.error('Chat init error:', e);
+        toast({ title: 'Chat unavailable', description: 'Could not initialize chat session', variant: 'destructive' });
+      }
+    };
+
+    initializeChat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen for external chat changes from sidebar
+  useEffect(() => {
+    const handler = async (e) => {
+      const id = e?.detail?.chatId;
+      if (!id) return;
+      setChatId(id);
+      setMessage('');
+      setFiles([]);
+      setConversation([]);
+      try {
+        const historyRes = await fetch(`http://localhost:8000/chats/${id}`);
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          const mapped = (historyData.messages || []).map((m, idx) => ({
+            id: m.timestamp ? new Date(m.timestamp).getTime() + idx : Date.now() + idx,
+            type: m.role === 'assistant' ? 'assistant' : 'user',
+            content: m.content,
+            files: m.files || null,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+          }));
+          setConversation(mapped);
+        }
+      } catch {}
+    };
+    window.addEventListener('verihub:chat-changed', handler);
+    return () => window.removeEventListener('verihub:chat-changed', handler);
+  }, []);
 
   // ---------------------- File handling ----------------------
   const handleFileSelect = (e) => {
@@ -96,6 +189,7 @@ const ChatInterface = () => {
         }
 
         const result = await response.json();
+        console.log('[Chat] file uploaded', { name: file.name, result });
         return {
           success: true,
           originalFile: file,
@@ -123,6 +217,21 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
+      // Ensure chatId exists
+      let activeChatId = chatId;
+      if (!activeChatId) {
+        try {
+          const createRes = await fetch('http://localhost:8000/chats', { method: 'POST' });
+          if (createRes.ok) {
+            const created = await createRes.json();
+            activeChatId = created.chatId;
+            setChatId(activeChatId);
+            localStorage.setItem('verihub_chat_id', activeChatId);
+            console.log('[Chat] created chatId on submit', activeChatId);
+          }
+        } catch {}
+      }
+
       // Upload files to backend if any
       let uploadedFiles = [];
       if (files.length > 0) {
@@ -167,23 +276,93 @@ const ChatInterface = () => {
         timestamp: new Date(),
       };
 
+      console.log('[Chat] send user message', userMessage);
       setConversation((prev) => [...prev, userMessage]);
+      // Persist user message to backend
+      if (chatId) {
+        try {
+          const res = await fetch(`http://localhost:8000/chats/${chatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: 'user',
+              content: userMessage.content,
+              files: userMessage.files?.map(f => ({
+                name: f.name,
+                size: f.size,
+                type: f.type,
+                cloudinaryData: f.cloudinaryData || null,
+              })) || null,
+              timestamp: userMessage.timestamp,
+            }),
+          });
+          console.log('[Chat] saved user message', res.status);
+        } catch (err) {
+          console.warn('Failed to save user message:', err);
+        }
+      }
       setMessage('');
       setFiles([]);
 
-      // simulate API response
-      await new Promise((r) => setTimeout(r, 1200));
+      // Call verification backend to generate a real result
+      console.log('[Chat] calling /ai/verify for message');
+      const formData = new FormData();
+      formData.append('input_type', 'text');
+      formData.append('raw_input', userMessage.content);
+      const verifyRes = await fetch('http://localhost:8000/ai/verify', {
+        method: 'POST',
+        body: formData,
+      });
+      let verifyJson = null;
+      if (verifyRes.ok) {
+        verifyJson = await verifyRes.json();
+        console.log('[Chat] /ai/verify result', verifyJson);
+      } else {
+        console.warn('Verify failed', verifyRes.status);
+      }
+
+      const assistantText = verifyJson?.reasoned_summary
+        || 'I analyzed your input and generated results, but no summary was provided.';
 
       const assistantMessage = {
         id: Date.now() + 1,
         type: 'assistant',
-        content: uploadedFiles.length > 0 
-          ? `I received your message and ${uploadedFiles.length} uploaded file(s). The files have been stored securely in cloud storage and are ready for analysis. This is a demo response from VeriHub assistant.`
-          : 'I received your message and analyzed the content. This is a demo response from VeriHub assistant. In the full version, I would provide detailed verification analysis.',
+        content: assistantText,
         timestamp: new Date(),
       };
 
+      console.log('[Chat] append assistant message', assistantMessage);
       setConversation((prev) => [...prev, assistantMessage]);
+      // Persist assistant message to backend
+      if (activeChatId) {
+        try {
+          const res2 = await fetch(`http://localhost:8000/chats/${activeChatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: 'assistant',
+              content: assistantMessage.content,
+              files: null,
+              timestamp: assistantMessage.timestamp,
+            }),
+          });
+          console.log('[Chat] saved assistant message', res2.status);
+          // refresh sidebar ordering
+          try {
+            console.log('[Chat] refresh chats list');
+            const listRes = await fetch('http://localhost:8000/chats');
+            if (listRes.ok) {
+              const data = await listRes.json();
+              console.log('[Chat] chats list updated', data);
+              setChats(data);
+            }
+          } catch {}
+        } catch (err) {
+          console.warn('Failed to save assistant message:', err);
+        }
+      }
+
+      // Stay on the same page after send; Results is available at /results/:chatId from the sidebar
     } catch (err) {
       console.error('Submit error:', err);
       toast({
@@ -210,7 +389,97 @@ const ChatInterface = () => {
   const isInitialState = conversation.length === 0;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex h-full bg-background">
+      {/* Sidebar */}
+      {sidebarOpen && (
+      <div className="w-64 border-r bg-surface/60 flex flex-col">
+        <div className="p-3 border-b flex items-center justify-between">
+          <div className="text-sm font-medium">Chats</div>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">×</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 rounded-lg"
+              onClick={async () => {
+                try {
+                  const res = await fetch('http://localhost:8000/chats', { method: 'POST' });
+                  if (!res.ok) throw new Error('Failed to create chat');
+                  const data = await res.json();
+                  localStorage.setItem('verihub_chat_id', data.chatId);
+                  setChatId(data.chatId);
+                  setConversation([]);
+                  const listRes = await fetch('http://localhost:8000/chats');
+                  if (listRes.ok) setChats(await listRes.json());
+                } catch {}
+              }}
+              aria-label="New chat"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {chats.map((c) => (
+              <div
+                key={c.chatId}
+                className={`group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer ${c.chatId === chatId ? 'bg-muted' : 'hover:bg-muted/60'}`}
+                onClick={async () => {
+                  if (c.chatId === chatId) return;
+                  localStorage.setItem('verihub_chat_id', c.chatId);
+                  setChatId(c.chatId);
+                  try {
+                    const historyRes = await fetch(`http://localhost:8000/chats/${c.chatId}`);
+                    if (historyRes.ok) {
+                      const historyData = await historyRes.json();
+                      const mapped = (historyData.messages || []).map((m, idx) => ({
+                        id: m.timestamp ? new Date(m.timestamp).getTime() + idx : Date.now() + idx,
+                        type: m.role === 'assistant' ? 'assistant' : 'user',
+                        content: m.content,
+                        files: m.files || null,
+                        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                      }));
+                      setConversation(mapped);
+                    } else {
+                      setConversation([]);
+                    }
+                  } catch {
+                    setConversation([]);
+                  }
+                }}
+              >
+                <div className="flex-1 truncate text-sm" title={c.title}>{c.title || 'New Chat'}</div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const current = window.prompt('Rename chat', c.title || '');
+                    if (current == null) return;
+                    try {
+                      await fetch(`http://localhost:8000/chats/${c.chatId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: current || 'New Chat' }),
+                      });
+                      const listRes = await fetch('http://localhost:8000/chats');
+                      if (listRes.ok) setChats(await listRes.json());
+                    } catch {}
+                  }}
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+      )}
+
+      {/* Main panel */}
+      <div className="flex-1 flex flex-col">
       {isInitialState ? (
         // ---------- INITIAL CENTERED HERO WITH INPUT ----------
         <div className="flex-1 flex flex-col items-center justify-center px-6">
@@ -433,6 +702,7 @@ const ChatInterface = () => {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

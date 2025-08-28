@@ -5,6 +5,7 @@ from app.core.database import connect_to_mongo, close_mongo_connection
 from app.routes.auth import router as auth_router
 from app.routes.uploads import router as uploads_router
 from app.routes.verify import router as verify_router
+from app.routes.chats import router as chats_router
 
 # FastAPI lifespan event
 @asynccontextmanager
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(uploads_router, prefix="/uploads", tags=["File Uploads"])
 app.include_router(verify_router, prefix="/ai", tags=["File Uploads and text"])
+app.include_router(chats_router, tags=["Chats"])
 
 @app.get("/")
 async def root():
