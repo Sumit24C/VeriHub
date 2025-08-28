@@ -75,7 +75,7 @@ class Workflow:
             extracted_text = self.tool.run_ocr("image.png") or ""
             tools_used = state.tools_used + ["ocr"]
             if not extracted_text.strip():
-                print("\nre-running easyocr")
+                # print("\nre-running easyocr")
                 tools_used.append("2nd_ocr")
                 extracted_text = self.tool.run_ocr("image.png") or ""
 
@@ -122,7 +122,8 @@ class Workflow:
                 if url: 
                     print("\n Scrapping link: ", url)
                     scrape_image_url_result = self.tool.scrape_page(url)
-                    tools_used.append("firecrawl_api")
+                    if "firecrawl_api" not in tools_used:
+                        tools_used.append("firecrawl_api")
                     if scrape_image_url_result:
                         if total_page_scraped == 5:  
                             print("scraped all links")
@@ -147,7 +148,7 @@ class Workflow:
 
             structured_llm = self.llm.with_structured_output(ImageCheck)
             result: ImageCheck = structured_llm.invoke(messages)
-            print("Match result of img_node: ", result)
+            # print("Match result of img_node: ", result)
             return {
                 "claim": llm_generated_claim,
                 "img_check": result,
@@ -202,7 +203,7 @@ class Workflow:
                 if state.img_check and state.img_check.extracted_text 
                 else state.raw_input)
         
-        print(f"🔍 Fact-checking query: {query}")
+        # print(f"🔍 Fact-checking query: {query}")
         fact_result = self.tool.fact_check(query=query)
         
         tools_used = state.tools_used + ["fact_check_api"]  
@@ -261,7 +262,7 @@ class Workflow:
             structured_llm = self.llm.with_structured_output(TextCheck)
             try:
                 result: TextCheck = structured_llm.invoke(messages)      
-                print("\n\ntweet result: ", result)              
+                # print("\n\ntweet result: ", result)              
                 return {
                     "tools_used": tools_used,
                     "text_check": result,
@@ -294,11 +295,11 @@ class Workflow:
                     if "firecrawl-api" not in tools_used:
                         tools_used.append('firecrawl-api')
                     
-                    print(f"Scraping article {i+1}/{max_articles}: {google_news_result.get('title', 'Unknown')}")
+                    # print(f"Scraping article {i+1}/{max_articles}: {google_news_result.get('title', 'Unknown')}")
                     
                     article_url = google_news_result.get('link') 
                     if not article_url:
-                        print(f"Warning: No URL found for article {i+1}")
+                        # print(f"Warning: No URL found for article {i+1}")
                         continue
                     
                     scrape_result = self.tool.scrape_page(url=article_url)
@@ -354,7 +355,7 @@ class Workflow:
     
     def _summary_node(self, state: VerificationSummary) -> Dict[str, Any]:
         """Generate final verification summary."""
-        print("Generating final recommendations")
+        # print("Generating final recommendations")
         
         messages = [
             SystemMessage(content=self.prompts.VERIFICATION_SUMMARY_REASONING_SYSTEM),
@@ -415,3 +416,17 @@ class Workflow:
         )
         final_state = self.workflow.invoke(initial_state)
         return VerificationSummary(**final_state)
+    
+    def stream(self, input_type: str, raw_input: str):
+        """Streaming execution (yields intermediate events)."""
+        initial_state = VerificationSummary(
+            raw_input=raw_input,
+            input_type=input_type,
+            tools_used=[],
+            text_check=None,
+            img_check=None,
+            reasoned_summary="",
+            result_from=""
+        )
+        for event in self.workflow.stream(initial_state, stream_mode="updates"):
+            yield event

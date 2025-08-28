@@ -103,7 +103,7 @@ class VerificationCheckPrompts:
     @staticmethod
     def img_verification_user(claim: str, img_url: str, image_metadata: list) -> str:
         # Format the metadata more clearly for the LLM
-        
+        print("\n image_metadata: ",image_metadata)
         return f"""
             CLAIM TO VERIFY: "{claim}"
             IMAGE URL: {img_url}

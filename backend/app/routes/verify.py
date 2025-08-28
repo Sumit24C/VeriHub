@@ -2,17 +2,19 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from ai_agent.src.workflow import Workflow
 import os
 import shutil
+import inspect
+import ai_agent.src.workflow as wf  # to locate workflow.py dynamically
 from ..utils.cloudinary_service import cloudinary_service
 from ..utils.check_input_type import get_input_with_type
 
 router = APIRouter()
 workflow = Workflow()
 
-# Store temp files inside src directory where workflow.py is
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.join(BASE_DIR, "../../src")
-TEMP_DIR = os.path.join(SRC_DIR, "temp")
-os.makedirs(TEMP_DIR, exist_ok=True)
+# Dynamically get the real src/ directory where workflow.py lives
+SRC_DIR = os.path.dirname(inspect.getfile(wf))
+
+# Fixed filename for OCR (workflow expects "image.png")
+IMAGE_PATH = os.path.join(SRC_DIR, "image.png")
 
 
 @router.post("/verify")
@@ -21,16 +23,14 @@ async def verify_content(
     raw_input: str = Form(None),
     file: UploadFile = File(None)
 ):
-    temp_path = None
     try:
         if file:  # Case: Image file uploaded
-            # Save temp file in src/temp
-            temp_path = os.path.join(TEMP_DIR, file.filename)
-            with open(temp_path, "wb") as buffer:
+            # Always save as "image.png" in src/ so workflow.py can pick it up
+            with open(IMAGE_PATH, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-            # Upload to Cloudinary
-            with open(temp_path, "rb") as f:
+            # Upload to Cloudinary (optional, for external URL storage)
+            with open(IMAGE_PATH, "rb") as f:
                 file_content = f.read()
 
             upload_result = await cloudinary_service.upload_file(
@@ -44,7 +44,7 @@ async def verify_content(
 
             img_link = upload_result.get("url") or upload_result.get("secure_url")
 
-            # Pass to workflow as image input
+            # Run workflow (depends on image.png existing)
             result = workflow.run(input_type="image", raw_input=img_link)
 
         else:  # Case: Text input
@@ -61,6 +61,9 @@ async def verify_content(
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Always cleanup temp file
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
+        # Cleanup image.png only if it exists
+        if os.path.exists(IMAGE_PATH):
+            try:
+                os.remove(IMAGE_PATH)
+            except Exception:
+                pass

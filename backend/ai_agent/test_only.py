@@ -147,6 +147,8 @@ def main():
             print(f"📝 Query: \"{query}\"")
             
             # Run verification
+            # for event in workflow.stream(input_type=input_type, raw_input=query):
+            #     print("Event: ",event)
             result = workflow.run(input_type=input_type, raw_input=query)
             
             # Display formatted results
