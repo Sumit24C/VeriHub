@@ -1,29 +1,36 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
-import { Loader2, Upload, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Paperclip, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
+import { useNavigate } from "react-router-dom";
 
 const Verification = () => {
-  const [inputType, setInputType] = useState("text");
   const [textInput, setTextInput] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
+  const { theme } = useTheme();
+  const navigate = useNavigate();
 
-  const handleTypeChange = (e) => {
-    setInputType(e.target.value);
-    setTextInput("");
-    setImageFile(null);
-    setResult(null);
-    setError("");
-  };
+  // Determine if we're in dark mode
+  const isDarkMode = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const handleTextChange = (e) => {
     setTextInput(e.target.value);
+    // Auto-resize textarea
+    e.target.style.height = 'auto';
+    e.target.style.height = e.target.scrollHeight + 'px';
   };
 
   const handleImageChange = (e) => {
     setImageFile(e.target.files[0]);
+    setError("");
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleSubmit = async (e) => {
@@ -34,24 +41,48 @@ const Verification = () => {
 
     try {
       let response;
-      if (inputType === "image" && imageFile) {
+      let inputType;
+      let originalInput;
+      let title;
+
+      if (imageFile) {
+        inputType = "image";
+        originalInput = imageFile.name;
+        title = `Image Verification: ${imageFile.name}`;
+        
         const formData = new FormData();
         formData.append("input_type", "image");
         formData.append("file", imageFile);
         response = await axios.post("http://localhost:8000/ai/verify", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-      } else if (inputType === "text" && textInput) {
+      } else if (textInput.trim()) {
+        inputType = "text";
+        originalInput = textInput;
+        // Create a title from the first few words of the input
+        const words = textInput.trim().split(' ').slice(0, 8).join(' ');
+        title = `Text Verification: ${words}${textInput.length > words.length ? '...' : ''}`;
+        
         const formData = new FormData();
         formData.append("input_type", "text");
         formData.append("raw_input", textInput);
         response = await axios.post("http://localhost:8000/ai/verify", formData);
       } else {
-        setError("⚠️ Please provide valid input.");
+        setError("⚠️ Please provide text input or upload an image.");
         setLoading(false);
         return;
       }
-      setResult(response.data);
+
+      // Navigate to results page with data
+      navigate("/results", {
+        state: {
+          result: response.data,
+          title,
+          inputType,
+          originalInput
+        }
+      });
+
     } catch (err) {
       setError(err.response?.data?.detail || "Verification failed.");
     } finally {
@@ -60,98 +91,77 @@ const Verification = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-8 bg-white rounded-2xl shadow-lg border">
-      <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">
-        Content Verification
-      </h2>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <div className="w-full max-w-2xl">
+        <h2 className="text-3xl font-bold mb-8 text-center text-foreground">
+          Validate Your Information
+        </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Radio Buttons */}
-        <div className="flex justify-center gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              value="text"
-              checked={inputType === "text"}
-              onChange={handleTypeChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                <form onSubmit={handleSubmit} className="space-y-2">
+          {/* Wrapper for Textarea and Buttons */}
+          <div className="border border-border rounded-2xl flex items-center">
+            {/* Upload Button */}
+            <button
+              type="button"
+              onClick={handleUploadClick}
+              className="flex items-center justify-center bg-secondary hover:bg-secondary/80 text-secondary-foreground p-3 rounded-xl transition m-2"
+            >
+              <Paperclip className="w-3 h-3" />
+            </button>
+
+            {/* Textarea */}
+            <textarea
+              className="flex-1 p-4 rounded-xl text-foreground resize-none focus:outline-none overflow-hidden border-none bg-background"
+              style={{ minHeight: "60px" }}
+              rows={1}
+              placeholder="Enter text to verify..."
+              value={textInput}
+              onChange={handleTextChange}
             />
-            <span className="text-gray-700 font-medium">Text</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              value="image"
-              checked={inputType === "image"}
-              onChange={handleTypeChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-gray-700 font-medium">Image</span>
-          </label>
-        </div>
 
-        {/* Input Fields */}
-        {inputType === "text" ? (
-          <textarea
-            className="w-full p-4 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
-            rows={5}
-            placeholder="✍️ Enter text to verify..."
-            value={textInput}
-            onChange={handleTextChange}
-            required
-          />
-        ) : (
-          <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
-            <Upload className="w-10 h-10 text-gray-500 mb-2" />
-            <span className="text-gray-600">
-              {imageFile ? imageFile.name : "Click to upload an image"}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageChange}
-              required
-            />
-          </label>
-        )}
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" /> Verifying...
-            </>
-          ) : (
-            "Verify"
-          )}
-        </button>
-      </form>
-
-      {/* Error */}
-      {error && (
-        <div className="mt-6 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-lg">
-          <AlertCircle className="w-5 h-5" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Result */}
-      {result && (
-        <div className="mt-6 p-6 border rounded-xl bg-green-50">
-          <div className="flex items-center gap-2 mb-3 text-green-700 font-semibold">
-            <CheckCircle2 className="w-6 h-6" />
-            <h3 className="text-lg">Verification Result</h3>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-xl transition m-2"
+              disabled={loading || (!textInput.trim() && !imageFile)}
+            >
+              {loading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <ArrowRight className="w-3 h-3" />
+              )}
+            </button>
           </div>
-          <pre className="whitespace-pre-wrap text-sm text-gray-800 bg-white rounded-lg p-4 border overflow-x-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
-      )}
+
+          {/* File Upload Display */}
+          {imageFile && (
+            <div className="flex justify-center">
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+                <span className="text-primary text-sm">📎 {imageFile.name}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden File Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageChange}
+          />
+        </form>
+
+        {/* Error */}
+        {error && (
+          <div className="mt-6 flex justify-center">
+            <div className="flex items-center gap-2 text-destructive bg-destructive/10 border border-destructive/20 px-4 py-2 rounded-lg">
+              <AlertCircle className="w-5 h-5" />
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
