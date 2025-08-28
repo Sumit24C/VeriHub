@@ -120,8 +120,22 @@ const Result = () => {
             <div className="text-base text-foreground">{confidence} ({(result?.text_check?.confidence_score ?? 0) * 100}%)</div>
           </div>
           <hr className="my-2 border-muted" />
+          {reasoning && (
+            <div>
+              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">� Analysis</h3>
+              <div className="text-base text-foreground">{reasoning}</div>
+            </div>
+          )}
+          {reasoning && <hr className="my-2 border-muted" />}
+          {summary && (
+            <div>
+              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📋 Summary</h3>
+              <div className="text-base text-foreground whitespace-pre-line min-h-[2em]">{summary}</div>
+            </div>
+          )}
+          {summary && <hr className="my-2 border-muted" />}
           <div>
-            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">🛠️ Tools Used</h3>
+            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">�🛠️ Tools Used</h3>
             <div className="flex flex-wrap gap-2">
               {tools.map(tool => (
                 <span key={tool} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md text-xs"><Hammer className="w-3 h-3" />{tool}</span>
@@ -142,20 +156,6 @@ const Result = () => {
               )) : <span className="text-muted-foreground">No sources found.</span>}
             </div>
           </div>
-          <hr className="my-2 border-muted" />
-          {reasoning && (
-            <div>
-              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">💭 Analysis</h3>
-              <div className="text-base text-foreground">{reasoning}</div>
-            </div>
-          )}
-          {reasoning && <hr className="my-2 border-muted" />}
-          {summary && (
-            <div>
-              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📋 Summary</h3>
-              <div className="text-base text-foreground whitespace-pre-line min-h-[2em]">{summary}</div>
-            </div>
-          )}
         </div>
       </div>
       <div className="flex gap-6 mt-4 mb-4">
