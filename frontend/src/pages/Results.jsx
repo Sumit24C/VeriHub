@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, AlertCircle, ArrowLeft, FileText, Image, Shield, ExternalLink, TrendingUp, Info, Clock, Star, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -75,10 +75,44 @@ const Results = () => {
   const isVerified = textCheck?.verified_status === "true" || textCheck?.verified_status === true;
   const confidenceScore = textCheck?.confidence_score || 0;
 
+  // Extract a human-friendly answer text either from the navigation state
+  // or from the last assistant message in the chat history
+  const extractAnswerFromContent = (content) => {
+    if (!content) return null;
+    try {
+      // Try code-fenced JSON
+      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
+      if (jsonMatch) {
+        const obj = JSON.parse(jsonMatch[1]);
+        if (obj?.reasoned_summary) return obj.reasoned_summary;
+      }
+      // Try raw JSON
+      if (content.trim().startsWith("{") && content.trim().endsWith("}")) {
+        const obj = JSON.parse(content);
+        if (obj?.reasoned_summary) return obj.reasoned_summary;
+      }
+    } catch {}
+    return content; // fallback to raw content text
+  };
+
+  const derivedAnswer = useMemo(() => {
+    if (resultSafe?.reasoned_summary) {
+      const extracted = extractAnswerFromContent(resultSafe.reasoned_summary);
+      return extracted || resultSafe.reasoned_summary;
+    }
+    const msgs = chatHistory?.messages || [];
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      if (msgs[i]?.role === 'assistant' && msgs[i]?.content) {
+        return extractAnswerFromContent(msgs[i].content);
+      }
+    }
+    return null;
+  }, [resultSafe, chatHistory]);
+
   return (
     <div className="min-h-screen bg-background flex">
       <ChatSidebar />
-      <div className="flex-1 p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
+      <div className="flex-1 p-4 md:p-6 space-y-8 max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button
@@ -96,111 +130,66 @@ const Results = () => {
         </div>
 
         {loadError && (
-          <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2 rounded-md">
+          <div className="text-sm text-destructive px-3 py-2">
             {loadError}
           </div>
         )}
 
-        {/* Conversation from chat history (if available) */}
-        {chatHistory && Array.isArray(chatHistory.messages) && chatHistory.messages.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Conversation</CardTitle>
+        {/* 1) Question */}
+        {(originalInput || chatHistory) && (
+          <Card className="border-0 shadow-none bg-transparent">
+            <CardHeader className="pb-2">
+              <CardTitle>Question</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {chatHistory.messages.map((m, idx) => (
-                  <div key={idx} className="text-sm">
-                    <strong>{m.role === 'assistant' ? 'Assistant' : 'You'}:</strong> {m.content}
-                  </div>
-                ))}
+              <div className="text-sm bg-muted/30 px-3 py-2 rounded-md">
+                {originalInput || (chatHistory?.messages?.find((m) => m.role === 'user')?.content || '')}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Query Card (from navigation state if present) */}
+        {/* 2) Verification Status */}
         {resultSafe && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-start gap-3">
-              {inputType === "image" ? (
-                <Image className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
-              ) : (
-                <FileText className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
-              )}
-              <div className="flex-1">
-                <CardTitle className="text-lg">
-                  {title || "Verification Query"}
-                </CardTitle>
-                <CardDescription className="mt-2">
-                  {originalInput && inputType === "text" && (
-                    <div className="bg-muted p-3 rounded-md text-sm">
-                      "{originalInput}"
-                    </div>
-                  )}
-                  {originalInput && inputType === "image" && (
-                    <div className="bg-muted p-3 rounded-md text-sm flex items-center gap-2">
-                      <Image className="h-4 w-4" />
-                      {originalInput}
-                    </div>
-                  )}
-                </CardDescription>
+          <Card className="border-0 shadow-none bg-transparent">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">Verification Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 text-sm">
+                {isVerified ? (
+                  <span className="text-green-500 font-medium">VERIFIED</span>
+                ) : (
+                  <span className="text-red-500 font-medium">NOT VERIFIED</span>
+                )}
+                <span className="text-muted-foreground">Confidence: {Math.round(confidenceScore * 100)}%</span>
               </div>
-            </div>
-          </CardHeader>
-        </Card>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Verification Status (shows when navigated with state) */}
-        {resultSafe && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              {isVerified ? (
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
-              ) : (
-                <AlertCircle className="h-6 w-6 text-red-500" />
-              )}
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  Verification Status
-                  <Badge variant={isVerified ? "default" : "destructive"}>
-                    {isVerified ? "VERIFIED" : "NOT VERIFIED"}
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  Confidence Score: {Math.round(confidenceScore * 100)}%
-                </CardDescription>
+        {/* 3) Answer */}
+        {derivedAnswer && (
+          <Card className="border-0 shadow-none bg-transparent">
+            <CardHeader className="pb-2">
+              <CardTitle>Answer</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
+                {derivedAnswer}
               </div>
-            </div>
-          </CardHeader>
-        </Card>
+            </CardContent>
+          </Card>
         )}
-        {/* Summary Analysis - Main Content */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              Summary Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-sm leading-relaxed">
-                <strong>VERIFIED as True.</strong> The claim that "Modi and Putin is going to China" has been thoroughly verified. Our analysis, utilizing tools such as the fact_check_api, twitter-api, google-news-api, and firecrawl-api, found strong corroborating evidence. Multiple reputable news organizations, including Reuters, The Economic Times, The Conversation, Kursiv Media, and Hindustan Times, report that Indian Prime Minister Narendra Modi and Russian President Vladimir Putin are indeed scheduled to attend the Shanghai Cooperation Organisation (SCO) summit. This event is slated to take place in Tianjin, China, from August 31 to September 1, 2025. No image verification was performed as no visual content was provided with the original claim.
-              </p>
-              <br />
-              <p className="text-sm leading-relaxed">
-                Our confidence in this verification is high, rated at 0.9, reflecting the consistent reporting across diverse, credible sources. While the event is confirmed, we advise users to check for the latest updates closer to the specified dates, as details for future international gatherings can occasionally be subject to minor adjustments. This information is based on current reports regarding the upcoming 2025 summit.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+
+        {/* Removed extra "Chat Response" section */}
+
+        {/* Removed duplicate status block at bottom */}
+        {/* Removed previous hardcoded Summary Analysis block. Answer section below shows generated content only. */}
 
         {/* Verification Details - Collapsible (only when a result is provided in navigation state) */}
         {resultSafe && (
-          <Card>
+          <Card className="border-0 shadow-none bg-transparent">
             <Collapsible open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
               <CollapsibleTrigger asChild>
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -288,25 +277,16 @@ const Results = () => {
           </Card>
         )}
 
-        {/* Action Buttons */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <Button onClick={handleBack} variant="outline" className="flex-1">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Verification
-              </Button>
-              <Button 
-                onClick={() => window.print()} 
-                variant="secondary"
-                className="flex-1"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Print Results
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Actions */}
+        <div className="pt-2">
+          <Button 
+            onClick={() => window.print()} 
+            variant="secondary"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Print Results
+          </Button>
+        </div>
       </div>
     </div>
   );

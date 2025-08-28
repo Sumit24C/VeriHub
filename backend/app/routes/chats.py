@@ -48,6 +48,13 @@ async def get_chat_history(chat_id: str) -> ChatHistoryResponse:
 
     chat = await db["chats"].find_one({"chatId": chat_id})
     if not chat:
+        # Fallback to legacy ObjectId-based documents
+        try:
+            from bson import ObjectId  # type: ignore
+            chat = await db["chats"].find_one({"_id": ObjectId(chat_id)})
+        except Exception:
+            chat = None
+    if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
     return ChatHistoryResponse(
@@ -65,6 +72,13 @@ async def append_message(chat_id: str, message: ChatMessage) -> ChatHistoryRespo
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     chat = await db["chats"].find_one({"chatId": chat_id})
+    if not chat:
+        # Fallback to legacy ObjectId-based documents
+        try:
+            from bson import ObjectId  # type: ignore
+            chat = await db["chats"].find_one({"_id": ObjectId(chat_id)})
+        except Exception:
+            chat = None
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 

@@ -217,19 +217,23 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      // Ensure chatId exists
-      let activeChatId = chatId;
-      if (!activeChatId) {
-        try {
-          const createRes = await fetch('http://localhost:8000/chats', { method: 'POST' });
-          if (createRes.ok) {
-            const created = await createRes.json();
-            activeChatId = created.chatId;
-            setChatId(activeChatId);
-            localStorage.setItem('verihub_chat_id', activeChatId);
-            console.log('[Chat] created chatId on submit', activeChatId);
-          }
-        } catch {}
+      // Always start a fresh chat session on each send
+      let activeChatId = null;
+      try {
+        const createRes = await fetch('http://localhost:8000/chats', { method: 'POST' });
+        if (createRes.ok) {
+          const created = await createRes.json();
+          activeChatId = created.chatId;
+          setChatId(activeChatId);
+          localStorage.setItem('verihub_chat_id', activeChatId);
+          console.log('[Chat] new chat created on submit', activeChatId);
+          // notify sidebar to reflect new chat context immediately
+          try { window.dispatchEvent(new CustomEvent('verihub:chat-changed', { detail: { chatId: activeChatId } })); } catch {}
+        } else {
+          throw new Error('Failed to create chat');
+        }
+      } catch (e) {
+        console.warn('Chat create failed', e);
       }
 
       // Upload files to backend if any
@@ -279,9 +283,9 @@ const ChatInterface = () => {
       console.log('[Chat] send user message', userMessage);
       setConversation((prev) => [...prev, userMessage]);
       // Persist user message to backend
-      if (chatId) {
+      if (activeChatId) {
         try {
-          const res = await fetch(`http://localhost:8000/chats/${chatId}/messages`, {
+          const res = await fetch(`http://localhost:8000/chats/${activeChatId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -297,6 +301,11 @@ const ChatInterface = () => {
             }),
           });
           console.log('[Chat] saved user message', res.status);
+          // refresh sidebar immediately so title shows up early
+          try {
+            const listRes = await fetch('http://localhost:8000/chats');
+            if (listRes.ok) setChats(await listRes.json());
+          } catch {}
         } catch (err) {
           console.warn('Failed to save user message:', err);
         }
@@ -304,25 +313,36 @@ const ChatInterface = () => {
       setMessage('');
       setFiles([]);
 
-      // Call verification backend to generate a real result
-      console.log('[Chat] calling /ai/verify for message');
-      const formData = new FormData();
-      formData.append('input_type', 'text');
-      formData.append('raw_input', userMessage.content);
-      const verifyRes = await fetch('http://localhost:8000/ai/verify', {
-        method: 'POST',
-        body: formData,
-      });
+      // Call streaming verify endpoint and push lines to overlay in real time
+      try { window.dispatchEvent(new CustomEvent('verihub:progress', { detail: { stage: 'verifying', text: 'Verifying your query...' } })); } catch {}
+      const sseUrl = `http://localhost:8000/ai/verify/stream?input_type=text&raw_input=${encodeURIComponent(userMessage.content)}`;
       let verifyJson = null;
-      if (verifyRes.ok) {
-        verifyJson = await verifyRes.json();
-        console.log('[Chat] /ai/verify result', verifyJson);
-      } else {
-        console.warn('Verify failed', verifyRes.status);
-      }
+      await new Promise((resolve) => {
+        const es = new EventSource(sseUrl);
+        es.onmessage = (e) => {
+          if (e?.data) {
+            try { window.dispatchEvent(new CustomEvent('verihub:progress', { detail: { text: e.data } })); } catch {}
+          }
+        };
+        es.addEventListener('complete', (e) => {
+          try {
+            verifyJson = JSON.parse(e.data);
+            window.dispatchEvent(new CustomEvent('verihub:progress', { detail: { stage: 'success', text: 'Verification complete.' } }));
+          } catch {
+            window.dispatchEvent(new CustomEvent('verihub:progress', { detail: { stage: 'error', text: 'Verification parsing failed' } }));
+          }
+          es.close();
+          resolve();
+        });
+        es.onerror = () => {
+          try { window.dispatchEvent(new CustomEvent('verihub:progress', { detail: { stage: 'error', text: 'Verification stream error' } })); } catch {}
+          es.close();
+          resolve();
+        };
+      });
 
       const assistantText = verifyJson?.reasoned_summary
-        || 'I analyzed your input and generated results, but no summary was provided.';
+        || 'Analysis completed. No summary provided by the backend.';
 
       const assistantMessage = {
         id: Date.now() + 1,
@@ -362,7 +382,25 @@ const ChatInterface = () => {
         }
       }
 
-      // Stay on the same page after send; Results is available at /results/:chatId from the sidebar
+      // After generating and saving, navigate to structured Results page for this chat
+      try {
+        navigate(`/results/${activeChatId || 'new'}`,
+        {
+          state: {
+            result: verifyJson || {
+              reasoned_summary: assistantMessage.content,
+              input_type: 'text',
+              raw_input: userMessage.content,
+            },
+            title: userMessage.content,
+            inputType: 'text',
+            originalInput: userMessage.content,
+            chatId: activeChatId,
+          },
+        });
+      } catch (e) {
+        console.warn('Navigation to results failed', e);
+      }
     } catch (err) {
       console.error('Submit error:', err);
       toast({
