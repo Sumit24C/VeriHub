@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function History() {
@@ -31,6 +31,34 @@ export default function History() {
 
   const handleShowResult = (item) => {
     navigate("/result", { state: { result: item.result } });
+  };
+
+  // Delete a history item by index and type
+  const handleDelete = (idx, type) => {
+    let updatedHistory;
+    if (type === "text") {
+      updatedHistory = history.filter((h, i) => {
+        // Only remove the item at idx in textHistory
+        if (h.type === "text") {
+          const textIdx = textHistory.findIndex((t) => t === h);
+          return textIdx !== idx;
+        }
+        return true;
+      });
+    } else {
+      updatedHistory = history.filter((h, i) => {
+        // Only remove the item at idx in imageHistory
+        if (h.type === "image") {
+          const imageIdx = imageHistory.findIndex((img) => img === h);
+          return imageIdx !== idx;
+        }
+        return true;
+      });
+    }
+    setHistory(updatedHistory);
+    setTextHistory(updatedHistory.filter((h) => h.type === "text"));
+    setImageHistory(updatedHistory.filter((h) => h.type === "image"));
+    localStorage.setItem("verification_history", JSON.stringify(updatedHistory));
   };
 
   return (
@@ -80,17 +108,23 @@ export default function History() {
                   {textHistory.map((item, idx) => (
                     <li
                       key={idx}
-                      className="p-4 rounded-xl bg-background border shadow-sm cursor-pointer hover:bg-primary/10 transition"
-                      onClick={() => handleShowResult(item)}
+                      className="py-2 px-4 rounded-xl bg-background border shadow-sm hover:bg-primary/10 transition flex flex-col"
                     >
-                      <div className="font-semibold mb-2">Input</div>
-                      <div className="mb-2 text-foreground text-lg font-medium truncate">
-                        {item.input}
+                      <div className="flex-1 cursor-pointer" onClick={() => handleShowResult(item)}>
+                        <div className="font-semibold mb-2">Input</div>
+                        <div className="mb-2 text-foreground text-lg font-medium truncate">
+                          {item.input}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2 text-right">
+                          {item.date
+                            ? new Date(item.date).toLocaleString()
+                            : ""}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-2 text-right">
-                        {item.date
-                          ? new Date(item.date).toLocaleString()
-                          : ""}
+                      <div className="flex justify-end mt-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(idx, "text")}> 
+                          <Trash2 className="h-5 w-5 text-destructive" />
+                        </Button>
                       </div>
                     </li>
                   ))}
@@ -106,17 +140,23 @@ export default function History() {
                   {imageHistory.map((item, idx) => (
                     <li
                       key={idx}
-                      className="p-4 rounded-xl bg-background border shadow-sm cursor-pointer hover:bg-primary/10 transition"
-                      onClick={() => handleShowResult(item)}
+                      className="p-4 rounded-xl bg-background border shadow-sm hover:bg-primary/10 transition flex flex-col"
                     >
-                      <div className="font-semibold mb-2">File Name</div>
-                      <div className="mb-2 text-foreground text-lg font-medium truncate">
-                        {item.input}
+                      <div className="flex-1 cursor-pointer" onClick={() => handleShowResult(item)}>
+                        <div className="font-semibold mb-2">File Name</div>
+                        <div className="mb-2 text-foreground text-lg font-medium truncate">
+                          {item.input}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2 text-right">
+                          {item.date
+                            ? new Date(item.date).toLocaleString()
+                            : ""}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-2 text-right">
-                        {item.date
-                          ? new Date(item.date).toLocaleString()
-                          : ""}
+                      <div className="flex justify-end mt-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(idx, "image")}> 
+                          <Trash2 className="h-5 w-5 text-destructive" />
+                        </Button>
                       </div>
                     </li>
                   ))}
