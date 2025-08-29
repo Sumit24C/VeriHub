@@ -210,7 +210,7 @@ const ChatInterface = () => {
   const isInitialState = conversation.length === 0;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+  <div className="flex flex-col h-full bg-background min-h-[520px] max-h-[520px]">
       {isInitialState ? (
         // ---------- INITIAL CENTERED HERO WITH INPUT ----------
         <div className="flex-1 flex flex-col items-center justify-center px-6">
@@ -293,7 +293,7 @@ const ChatInterface = () => {
       ) : (
         // ---------- CONVERSATION + BOTTOM INPUT ----------
         <>
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 p-4 min-h-[320px] max-h-[320px]">
             <div ref={messagesRef} className="space-y-6 max-w-3xl mx-auto">
               {conversation.map((msg) => (
                 <div key={msg.id} className="group">

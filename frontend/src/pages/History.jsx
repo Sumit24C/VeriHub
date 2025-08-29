@@ -2,6 +2,17 @@ import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 
 export default function History() {
@@ -34,11 +45,19 @@ export default function History() {
   };
 
   // Delete a history item by index and type
-  const handleDelete = (idx, type) => {
+  const [pendingDelete, setPendingDelete] = useState({ idx: null, type: null });
+  const [showDialog, setShowDialog] = useState(false);
+
+  const confirmDelete = (idx, type) => {
+    setPendingDelete({ idx, type });
+    setShowDialog(true);
+  };
+
+  const handleDeleteConfirmed = () => {
+    const { idx, type } = pendingDelete;
     let updatedHistory;
     if (type === "text") {
       updatedHistory = history.filter((h, i) => {
-        // Only remove the item at idx in textHistory
         if (h.type === "text") {
           const textIdx = textHistory.findIndex((t) => t === h);
           return textIdx !== idx;
@@ -47,7 +66,6 @@ export default function History() {
       });
     } else {
       updatedHistory = history.filter((h, i) => {
-        // Only remove the item at idx in imageHistory
         if (h.type === "image") {
           const imageIdx = imageHistory.findIndex((img) => img === h);
           return imageIdx !== idx;
@@ -59,6 +77,8 @@ export default function History() {
     setTextHistory(updatedHistory.filter((h) => h.type === "text"));
     setImageHistory(updatedHistory.filter((h) => h.type === "image"));
     localStorage.setItem("verification_history", JSON.stringify(updatedHistory));
+    setShowDialog(false);
+    setPendingDelete({ idx: null, type: null });
   };
 
   return (
@@ -122,9 +142,25 @@ export default function History() {
                         </div>
                       </div>
                       <div className="flex justify-end mt-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(idx, "text")}> 
-                          <Trash2 className="h-5 w-5 text-destructive" />
-                        </Button>
+                        <AlertDialog open={showDialog && pendingDelete.idx === idx && pendingDelete.type === "text"} onOpenChange={setShowDialog}>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => confirmDelete(idx, "text")}> 
+                              <Trash2 className="h-5 w-5 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Do you really want to delete this history? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleDeleteConfirmed}>Yes, Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </li>
                   ))}
@@ -154,9 +190,25 @@ export default function History() {
                         </div>
                       </div>
                       <div className="flex justify-end mt-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(idx, "image")}> 
-                          <Trash2 className="h-5 w-5 text-destructive" />
-                        </Button>
+                        <AlertDialog open={showDialog && pendingDelete.idx === idx && pendingDelete.type === "image"} onOpenChange={setShowDialog}>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => confirmDelete(idx, "image")}> 
+                              <Trash2 className="h-5 w-5 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Do you really want to delete this history? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleDeleteConfirmed}>Yes, Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </li>
                   ))}

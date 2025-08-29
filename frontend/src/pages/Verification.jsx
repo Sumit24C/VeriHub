@@ -9,6 +9,7 @@ const Verification = () => {
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isDragActive, setIsDragActive] = useState(false);
   const navigate = useNavigate();
 
   const handleTypeChange = (e) => {
@@ -24,6 +25,7 @@ const Verification = () => {
 
   const handleImageChange = (e) => {
     setImageFile(e.target.files[0]);
+    e.target.value = ""; // Reset input value so the same file can be selected again
   };
 
   const saveHistory = (type, input, result) => {
@@ -45,7 +47,12 @@ const Verification = () => {
 
     try {
       let response;
-      if (inputType === "image" && imageFile) {
+      if (inputType === "image") {
+        if (!imageFile) {
+          setError("⚠️ Please provide an image to verify.");
+          setLoading(false);
+          return;
+        }
         const formData = new FormData();
         formData.append("input_type", "image");
         formData.append("file", imageFile);
@@ -53,6 +60,7 @@ const Verification = () => {
           headers: { "Content-Type": "multipart/form-data" },
         });
         saveHistory("image", imageFile.name, response.data);
+        setImageFile(null); // Clear file after successful verification
       } else if (inputType === "text" && textInput) {
         const formData = new FormData();
         formData.append("input_type", "text");
@@ -122,13 +130,30 @@ const Verification = () => {
             />
           ) : (
             <label
-              className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-muted rounded-xl cursor-pointer bg-background hover:bg-muted transition shadow-md hover:shadow-lg"
-              onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; }}
+              className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer bg-background transition shadow-md hover:shadow-lg ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-muted'}`}
+              onDragOver={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragActive(true);
+                e.dataTransfer.dropEffect = 'copy';
+              }}
+              onDragLeave={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragActive(false);
+              }}
               onDrop={e => {
                 e.preventDefault();
                 e.stopPropagation();
+                setIsDragActive(false);
                 if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                   setImageFile(e.dataTransfer.files[0]);
+                }
+              }}
+              onClick={e => {
+                // Only open file picker if user clicks directly on the label, not on child elements
+                if (e.target === e.currentTarget) {
+                  e.currentTarget.querySelector('input[type="file"]').click();
                 }
               }}
             >
@@ -141,7 +166,6 @@ const Verification = () => {
                 accept="image/*"
                 className="hidden"
                 onChange={handleImageChange}
-                required
               />
             </label>
           )}
