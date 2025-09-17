@@ -66,6 +66,172 @@ const ChatInterface = () => {
     return <FileText className="w-4 h-4" />;
   };
 
+  // ---------------------- Streaming Support ----------------------
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [currentStatus, setCurrentStatus] = useState('');
+
+  // Check if browser supports streaming
+  const supportsSSE = () => {
+    return typeof EventSource !== 'undefined';
+  };
+
+  // Handle streaming with ReadableStream
+  const handleStreamingSubmit = async (userMessage) => {
+    const assistantMessageId = Date.now() + 1;
+    
+    // Add placeholder assistant message
+    const assistantMessage = {
+      id: assistantMessageId,
+      type: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    
+    setConversation((prev) => [...prev, assistantMessage]);
+    setStreamingMessage('');
+    setCurrentStatus('Connecting...');
+
+    // Prepare FormData for streaming endpoint
+    const formData = new FormData();
+    formData.append('input_type', 'text');
+    formData.append('raw_input', userMessage.content);
+    
+    // Add file if present
+    if (userMessage.files && userMessage.files.length > 0) {
+      formData.append('file', userMessage.files[0]);
+      formData.append('input_type', 'image');
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch('http://localhost:8000/ai/stream-chat', {
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            
+            if (data === '[DONE]') {
+              setCurrentStatus('');
+              setConversation((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isStreaming: false }
+                    : msg
+                )
+              );
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.type === 'status') {
+                setCurrentStatus(parsed.content);
+              } else if (parsed.type === 'token') {
+                accumulatedContent += parsed.content;
+                setStreamingMessage(accumulatedContent);
+                
+                setConversation((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: accumulatedContent }
+                      : msg
+                  )
+                );
+              } else if (parsed.type === 'complete') {
+                const finalContent = JSON.stringify(parsed.result, null, 2);
+                setStreamingMessage(finalContent);
+                
+                setConversation((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: finalContent, isStreaming: false }
+                      : msg
+                  )
+                );
+                setCurrentStatus('');
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.content);
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+      setCurrentStatus('');
+      
+      setConversation((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: `Error: ${error.message}`, isStreaming: false }
+            : msg
+        )
+      );
+      
+      toast({
+        title: 'Streaming Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Fallback to regular demo
+  const handleRegularSubmit = async (userMessage) => {
+    try {
+      // Simulate file upload progress
+      if (userMessage.files && userMessage.files.length > 0) {
+        for (let i = 0; i <= 100; i += 10) {
+          setUploadProgress(i);
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const assistantMessage = {
+        id: Date.now() + 1,
+        type: 'assistant',
+        content: 'I received your message and any attached files. This is a demo response from VeriHub assistant.',
+        timestamp: new Date()
+      };
+
+      setConversation(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -88,25 +254,12 @@ const ChatInterface = () => {
     setUploadProgress(0);
 
     try {
-      // Simulate file upload progress
-      if (files.length > 0) {
-        for (let i = 0; i <= 100; i += 10) {
-          setUploadProgress(i);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+      // Try streaming first, fallback to regular if not supported
+      if (supportsSSE()) {
+        await handleStreamingSubmit(userMessage);
+      } else {
+        await handleRegularSubmit(userMessage);
       }
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const assistantMessage = {
-        id: Date.now() + 1,
-        type: 'assistant',
-        content: 'I received your message and any attached files. This is a demo response from VeriHub assistant.',
-        timestamp: new Date()
-      };
-
-      setConversation(prev => [...prev, assistantMessage]);
     } catch (error) {
       toast({
         title: "Error",
@@ -161,7 +314,12 @@ const ChatInterface = () => {
                       : 'bg-muted'
                   }`}>
                     <CardContent className="p-3">
-                      <p className="text-sm">{msg.content}</p>
+                      <p className="text-sm">
+                        {msg.content}
+                        {msg.isStreaming && (
+                          <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse">|</span>
+                        )}
+                      </p>
                       
                       {/* Display attached files */}
                       {msg.files && msg.files.length > 0 && (
@@ -197,7 +355,14 @@ const ChatInterface = () => {
                 <Card className="bg-muted">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2">
-                      <div className="animate-pulse">Thinking...</div>
+                      <div className="animate-pulse">{currentStatus || 'Processing...'}</div>
+                      {currentStatus && (
+                        <div className="flex space-x-1">
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                        </div>
+                      )}
                     </div>
                     {uploadProgress > 0 && uploadProgress < 100 && (
                       <div className="mt-2">

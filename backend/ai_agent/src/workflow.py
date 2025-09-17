@@ -430,3 +430,201 @@ class Workflow:
         )
         for event in self.workflow.stream(initial_state, stream_mode="updates"):
             yield event
+    
+    def stream_response(self, input_type: str, raw_input: str):
+        """Generator function that yields incremental results for each verification step."""
+        import json
+        import time
+        
+        # Yield initial status
+        yield f"data: {json.dumps({
+            'type': 'step_start', 
+            'step': 'initializing',
+            'title': 'Starting Verification Process',
+            'content': 'Initializing verification workflow...',
+            'progress': 10
+        })}\n\n"
+        
+        try:
+            # Execute the workflow with streaming updates
+            initial_state = VerificationSummary(
+                raw_input=raw_input,
+                input_type=input_type,
+                tools_used=[],
+                text_check=None,
+                img_check=None,
+                reasoned_summary="",
+                result_from=""
+            )
+            
+            # Stream each step with detailed progress
+            current_state = initial_state
+            progress = 20
+            
+            for event in self.workflow.stream(initial_state, stream_mode="updates"):
+                if event:
+                    node_name = list(event.keys())[0] if event else "processing"
+                    node_data = event.get(node_name, {})
+                    
+                    # Update current state
+                    if isinstance(node_data, dict):
+                        for key, value in node_data.items():
+                            setattr(current_state, key, value)
+                    
+                    # Yield step-specific results immediately
+                    if node_name == "router":
+                        yield f"data: {json.dumps({
+                            'type': 'step_complete',
+                            'step': 'router',
+                            'title': 'Input Analysis Complete',
+                            'content': f'Detected input type: {input_type}',
+                            'progress': 25,
+                            'data': {'input_type': input_type, 'raw_input': raw_input[:100] + '...' if len(raw_input) > 100 else raw_input}
+                        })}\n\n"
+                        
+                    elif node_name == "img_check":
+                        img_check = getattr(current_state, 'img_check', None)
+                        if img_check:
+                            yield f"data: {json.dumps({
+                                'type': 'step_complete',
+                                'step': 'image_analysis',
+                                'title': 'Image Analysis Complete',
+                                'content': f'Text extracted: "{img_check.extracted_text[:100]}..."' if img_check.extracted_text else 'No text found in image',
+                                'progress': 40,
+                                'data': {
+                                    'extracted_text': img_check.extracted_text,
+                                    'img_found': img_check.img_found,
+                                    'match_status': img_check.match_status
+                                }
+                            })}\n\n"
+                        else:
+                            yield f"data: {json.dumps({
+                                'type': 'step_progress',
+                                'step': 'image_analysis',
+                                'title': 'Processing Image',
+                                'content': 'Extracting text and analyzing image content...',
+                                'progress': 35
+                            })}\n\n"
+                            
+                    elif node_name == "fact_check_node":
+                        text_check = getattr(current_state, 'text_check', None)
+                        if text_check:
+                            yield f"data: {json.dumps({
+                                'type': 'step_complete',
+                                'step': 'fact_check',
+                                'title': 'Fact Check Complete',
+                                'content': f'Status: {text_check.verified_status.upper()} (Confidence: {text_check.confidence_score:.1%})',
+                                'progress': 55,
+                                'data': {
+                                    'verified_status': text_check.verified_status,
+                                    'confidence_score': text_check.confidence_score,
+                                    'verified_from': text_check.verified_from,
+                                    'reasoning': text_check.reasoning[:200] + '...' if text_check.reasoning and len(text_check.reasoning) > 200 else text_check.reasoning
+                                }
+                            })}\n\n"
+                        else:
+                            yield f"data: {json.dumps({
+                                'type': 'step_progress',
+                                'step': 'fact_check',
+                                'title': 'Fact Checking',
+                                'content': 'Cross-referencing with reliable sources...',
+                                'progress': 50
+                            })}\n\n"
+                            
+                    elif node_name == "twitter_node":
+                        text_check = getattr(current_state, 'text_check', None)
+                        if text_check:
+                            yield f"data: {json.dumps({
+                                'type': 'step_complete',
+                                'step': 'social_media',
+                                'title': 'Social Media Analysis Complete',
+                                'content': f'Found related tweets - Status: {text_check.verified_status.upper()}',
+                                'progress': 70,
+                                'data': {
+                                    'verified_status': text_check.verified_status,
+                                    'confidence_score': text_check.confidence_score,
+                                    'source': 'Twitter/X',
+                                    'reasoning': text_check.reasoning[:200] + '...' if text_check.reasoning and len(text_check.reasoning) > 200 else text_check.reasoning
+                                }
+                            })}\n\n"
+                        else:
+                            yield f"data: {json.dumps({
+                                'type': 'step_progress',
+                                'step': 'social_media',
+                                'title': 'Social Media Search',
+                                'content': 'Searching Twitter/X for related posts...',
+                                'progress': 65
+                            })}\n\n"
+                            
+                    elif node_name == "google_news_node":
+                        text_check = getattr(current_state, 'text_check', None)
+                        if text_check:
+                            yield f"data: {json.dumps({
+                                'type': 'step_complete',
+                                'step': 'news_analysis',
+                                'title': 'News Analysis Complete',
+                                'content': f'Analyzed news articles - Final status: {text_check.verified_status.upper()}',
+                                'progress': 85,
+                                'data': {
+                                    'verified_status': text_check.verified_status,
+                                    'confidence_score': text_check.confidence_score,
+                                    'source': 'Google News',
+                                    'reasoning': text_check.reasoning[:200] + '...' if text_check.reasoning and len(text_check.reasoning) > 200 else text_check.reasoning
+                                }
+                            })}\n\n"
+                        else:
+                            yield f"data: {json.dumps({
+                                'type': 'step_progress',
+                                'step': 'news_analysis',
+                                'title': 'News Search',
+                                'content': 'Analyzing news articles and reports...',
+                                'progress': 80
+                            })}\n\n"
+                            
+                    elif node_name == "summary":
+                        yield f"data: {json.dumps({
+                            'type': 'step_progress',
+                            'step': 'summary',
+                            'title': 'Generating Summary',
+                            'content': 'Creating comprehensive verification report...',
+                            'progress': 90
+                        })}\n\n"
+                        
+                    # Small delay for visual effect
+                    time.sleep(0.2)
+            
+            # Get final result
+            final_result = VerificationSummary(**current_state.__dict__)
+            
+            # Stream final summary
+            if final_result.reasoned_summary:
+                yield f"data: {json.dumps({
+                    'type': 'step_complete',
+                    'step': 'summary',
+                    'title': 'Verification Summary',
+                    'content': final_result.reasoned_summary[:300] + '...' if len(final_result.reasoned_summary) > 300 else final_result.reasoned_summary,
+                    'progress': 95,
+                    'data': {'summary': final_result.reasoned_summary}
+                })}\n\n"
+            
+            # Send final completion with full result
+            yield f"data: {json.dumps({
+                'type': 'complete',
+                'progress': 100,
+                'title': 'Verification Complete',
+                'content': 'All verification steps completed successfully!',
+                'result': final_result.model_dump()
+            })}\n\n"
+            
+        except Exception as e:
+            error_msg = f"Error during verification: {str(e)}"
+            yield f"data: {json.dumps({
+                'type': 'error',
+                'step': 'error',
+                'title': 'Verification Error',
+                'content': error_msg,
+                'progress': 0
+            })}\n\n"
+        
+        # End the stream
+        yield "data: [DONE]\n\n"

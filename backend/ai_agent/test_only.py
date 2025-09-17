@@ -125,8 +125,89 @@ def get_input_with_type():
     
     return query, "text"
 
+def test_streaming():
+    """Test the streaming functionality with sample data"""
+    print("\n🚀 Testing Streaming Functionality...")
+    
+    try:
+        workflow = Workflow()
+        print("✅ Workflow initialized successfully!")
+        
+        # Test with a simple text query
+        test_query = "The COVID-19 vaccine contains microchips."
+        input_type = "text"
+        
+        print(f"\n🧪 Testing streaming with query: \"{test_query}\"")
+        print("📡 Streaming response chunks:")
+        print("-" * 60)
+        
+        chunk_count = 0
+        step_count = 0
+        for chunk in workflow.stream_response(input_type=input_type, raw_input=test_query):
+            chunk_count += 1
+            chunk_data = chunk.strip()
+            
+            # Parse the streaming data to show structured output
+            if chunk_data.startswith('data: {'):
+                try:
+                    import json
+                    event_data = json.loads(chunk_data[6:])  # Remove 'data: '
+                    event_type = event_data.get('type', 'unknown')
+                    
+                    if event_type in ['step_start', 'step_complete', 'step_progress']:
+                        step_count += 1
+                        step_title = event_data.get('title', 'Unknown Step')
+                        step_content = event_data.get('content', '')
+                        progress = event_data.get('progress', 0)
+                        
+                        status_icon = {
+                            'step_start': '⚡',
+                            'step_progress': '🔄',
+                            'step_complete': '✅'
+                        }.get(event_type, '🔍')
+                        
+                        print(f"[Step {step_count:02d}] {status_icon} {step_title} ({progress}%)")
+                        print(f"         {step_content}")
+                        
+                        # Show verification data if available
+                        if 'data' in event_data and event_data['data']:
+                            data = event_data['data']
+                            if 'verified_status' in data:
+                                confidence = data.get('confidence_score', 0) * 100
+                                print(f"         🎯 Result: {data['verified_status'].upper()} ({confidence:.0f}% confidence)")
+                    
+                    elif event_type == 'complete':
+                        print(f"\n✅ VERIFICATION COMPLETE!")
+                        print(f"    Final Status: {event_data.get('content', 'Done')}")
+                    
+                    elif event_type == 'error':
+                        print(f"\n❌ ERROR: {event_data.get('content', 'Unknown error')}")
+                    
+                except json.JSONDecodeError:
+                    print(f"[Chunk {chunk_count:02d}] {chunk_data}")
+            else:
+                print(f"[Chunk {chunk_count:02d}] {chunk_data}")
+            
+            # Add a small delay to see streaming effect
+            import time
+            time.sleep(0.1)
+        
+        print("-" * 60)
+        print(f"✅ Streaming test completed! Received {chunk_count} chunks.")
+        
+    except Exception as e:
+        print(f"❌ Error during streaming test: {e}")
+        import traceback
+        traceback.print_exc()
+
 def main():
     print("🚀 Starting Fact-Checker AI Agent...")
+    
+    # Ask user if they want to test streaming
+    test_choice = input("Would you like to test streaming functionality? (y/n): ").lower()
+    if test_choice in ['y', 'yes']:
+        test_streaming()
+        return
     
     try:
         workflow = Workflow()

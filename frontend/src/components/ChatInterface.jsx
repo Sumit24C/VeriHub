@@ -114,7 +114,239 @@ const ChatInterface = () => {
     return Promise.all(uploadPromises);
   };
 
-  // ---------------------- Messaging ----------------------
+  // ---------------------- Streaming Support ----------------------
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [currentStatus, setCurrentStatus] = useState('');
+  const [verificationSteps, setVerificationSteps] = useState([]);
+  const [currentProgress, setCurrentProgress] = useState(0);
+  const eventSourceRef = useRef(null);
+
+  // Check if browser supports SSE
+  const supportsSSE = () => {
+    return typeof EventSource !== 'undefined';
+  };
+
+  // Handle streaming with EventSource (SSE)
+  const handleStreamingSubmit = async (userMessage) => {
+    const assistantMessageId = Date.now() + 1;
+    
+    // Add placeholder assistant message
+    const assistantMessage = {
+      id: assistantMessageId,
+      type: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    
+    setConversation((prev) => [...prev, assistantMessage]);
+    setStreamingMessage('');
+    setCurrentStatus('Connecting...');
+
+    // Prepare FormData for streaming endpoint
+    const formData = new FormData();
+    formData.append('input_type', 'text');
+    formData.append('raw_input', userMessage.content);
+    
+    // Add file if present (take the first file for simplicity in streaming)
+    if (userMessage.files && userMessage.files.length > 0) {
+      formData.append('file', userMessage.files[0]);
+      formData.append('input_type', 'image');
+    }
+
+    try {
+      // Get authentication token if available
+      const token = localStorage.getItem('access_token'); // Use the same key as login
+      
+      const response = await fetch('http://localhost:8000/ai/stream-chat', {
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            
+            if (data === '[DONE]') {
+              setCurrentStatus('');
+              // Mark streaming as complete
+              setConversation((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isStreaming: false }
+                    : msg
+                )
+              );
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.type === 'step_start') {
+                setCurrentStatus(parsed.content);
+                setCurrentProgress(parsed.progress || 0);
+                setVerificationSteps(prev => [...prev, {
+                  id: Date.now(),
+                  step: parsed.step,
+                  title: parsed.title,
+                  content: parsed.content,
+                  status: 'in_progress',
+                  progress: parsed.progress,
+                  timestamp: new Date()
+                }]);
+                
+              } else if (parsed.type === 'step_progress') {
+                setCurrentStatus(parsed.content);
+                setCurrentProgress(parsed.progress || 0);
+                setVerificationSteps(prev => 
+                  prev.map(step => 
+                    step.step === parsed.step 
+                      ? { ...step, content: parsed.content, progress: parsed.progress, status: 'in_progress' }
+                      : step
+                  )
+                );
+                
+              } else if (parsed.type === 'step_complete') {
+                setCurrentStatus(parsed.content);
+                setCurrentProgress(parsed.progress || 0);
+                setVerificationSteps(prev => {
+                  const existing = prev.find(s => s.step === parsed.step);
+                  if (existing) {
+                    return prev.map(step => 
+                      step.step === parsed.step 
+                        ? { ...step, content: parsed.content, progress: parsed.progress, status: 'complete', data: parsed.data }
+                        : step
+                    );
+                  } else {
+                    return [...prev, {
+                      id: Date.now(),
+                      step: parsed.step,
+                      title: parsed.title,
+                      content: parsed.content,
+                      status: 'complete',
+                      progress: parsed.progress,
+                      data: parsed.data,
+                      timestamp: new Date()
+                    }];
+                  }
+                });
+                
+                // Build up the accumulated content with step results
+                const stepSummary = `${parsed.title}: ${parsed.content}\n`;
+                accumulatedContent += stepSummary;
+                
+                setConversation((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: accumulatedContent, verificationSteps: verificationSteps }
+                      : msg
+                  )
+                );
+                
+              } else if (parsed.type === 'complete') {
+                setCurrentStatus('Verification Complete!');
+                setCurrentProgress(100);
+                
+                // Final comprehensive result
+                const finalContent = accumulatedContent + `\n\nFinal Result:\n${JSON.stringify(parsed.result, null, 2)}`;
+                
+                setConversation((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { 
+                          ...msg, 
+                          content: finalContent, 
+                          isStreaming: false, 
+                          verificationSteps: verificationSteps,
+                          finalResult: parsed.result
+                        }
+                      : msg
+                  )
+                );
+                
+                // Clear streaming state
+                setTimeout(() => {
+                  setCurrentStatus('');
+                  setVerificationSteps([]);
+                  setCurrentProgress(0);
+                }, 1000);
+                
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.content);
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+      setCurrentStatus('');
+      
+      // Update with error message
+      setConversation((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: `Error: ${error.message}`, isStreaming: false }
+            : msg
+        )
+      );
+      
+      toast({
+        title: 'Streaming Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Fallback to regular fetch for non-streaming
+  const handleRegularSubmit = async (userMessage) => {
+    try {
+      // This would be your existing API call logic
+      await new Promise((r) => setTimeout(r, 1200));
+      
+      const assistantMessage = {
+        id: Date.now() + 1,
+        type: 'assistant',
+        content: userMessage.files && userMessage.files.length > 0
+          ? `I received your message and ${userMessage.files.length} uploaded file(s). The files have been stored securely in cloud storage and are ready for analysis. This is a demo response from VeriHub assistant.`
+          : 'I received your message and analyzed the content. This is a demo response from VeriHub assistant. In the full version, I would provide detailed verification analysis.',
+        timestamp: new Date(),
+      };
+      
+      setConversation((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Regular submit error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to send message. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // ---------------------- Main Submit Handler ----------------------
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
@@ -123,7 +355,7 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      // Upload files to backend if any
+      // Upload files to backend if any (for file URLs)
       let uploadedFiles = [];
       if (files.length > 0) {
         toast({
@@ -163,7 +395,7 @@ const ChatInterface = () => {
         id: Date.now(),
         type: 'user',
         content: message.trim(),
-        files: uploadedFiles.length > 0 ? uploadedFiles : null,
+        files: uploadedFiles.length > 0 ? uploadedFiles : (files.length > 0 ? files : null),
         timestamp: new Date(),
       };
 
@@ -171,19 +403,12 @@ const ChatInterface = () => {
       setMessage('');
       setFiles([]);
 
-      // simulate API response
-      await new Promise((r) => setTimeout(r, 1200));
-
-      const assistantMessage = {
-        id: Date.now() + 1,
-        type: 'assistant',
-        content: uploadedFiles.length > 0 
-          ? `I received your message and ${uploadedFiles.length} uploaded file(s). The files have been stored securely in cloud storage and are ready for analysis. This is a demo response from VeriHub assistant.`
-          : 'I received your message and analyzed the content. This is a demo response from VeriHub assistant. In the full version, I would provide detailed verification analysis.',
-        timestamp: new Date(),
-      };
-
-      setConversation((prev) => [...prev, assistantMessage]);
+      // Try streaming first, fallback to regular if not supported
+      if (supportsSSE()) {
+        await handleStreamingSubmit(userMessage);
+      } else {
+        await handleRegularSubmit(userMessage);
+      }
     } catch (err) {
       console.error('Submit error:', err);
       toast({
@@ -306,7 +531,12 @@ const ChatInterface = () => {
 
                     <div className="flex-1 space-y-2">
                       <div className="prose prose-sm max-w-none">
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                          {msg.isStreaming && (
+                            <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse">|</span>
+                          )}
+                        </p>
                       </div>
 
                       {msg.files && msg.files.length > 0 && (
@@ -336,10 +566,63 @@ const ChatInterface = () => {
                         <Bot className="w-4 h-4" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1">
+                    <div className="flex-1 space-y-3">
+                      {/* Current Status */}
                       <div className="flex items-center gap-2">
-                        <div className="animate-pulse text-sm text-muted-foreground">Thinking...</div>
+                        <div className="animate-pulse text-sm text-muted-foreground">
+                          {currentStatus || 'Processing...'}
+                        </div>
+                        {currentStatus && (
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                            <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                            <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Progress Bar */}
+                      {currentProgress > 0 && (
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div 
+                            className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
+                            style={{width: `${currentProgress}%`}}
+                          ></div>
+                        </div>
+                      )}
+                      
+                      {/* Verification Steps */}
+                      {verificationSteps.length > 0 && (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {verificationSteps.map((step, index) => (
+                            <div key={step.id} className="flex items-center gap-3 text-xs">
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                step.status === 'complete' 
+                                  ? 'bg-green-500' 
+                                  : step.status === 'in_progress' 
+                                    ? 'bg-blue-500 animate-pulse' 
+                                    : 'bg-gray-300'
+                              }`}></div>
+                              <div className="flex-1">
+                                <div className="font-medium text-foreground">{step.title}</div>
+                                <div className="text-muted-foreground">{step.content}</div>
+                                {step.data && step.data.verified_status && (
+                                  <div className={`text-xs mt-1 font-medium ${
+                                    step.data.verified_status === 'true' ? 'text-green-600' :
+                                    step.data.verified_status === 'false' ? 'text-red-600' :
+                                    'text-yellow-600'
+                                  }`}>
+                                    Status: {step.data.verified_status.toUpperCase()}
+                                    {step.data.confidence_score && (
+                                      <span className="ml-2">({Math.round(step.data.confidence_score * 100)}% confidence)</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle2, XCircle, AlertTriangle, Hammer, Link2, ArrowLeft } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Hammer, Link2, ArrowLeft, FileText, BarChart3 } from "lucide-react";
+import Header from "@/components/Header";
+import { Button } from "@/components/ui/button";
 
 const statusIcons = {
-  true: <CheckCircle2 className="w-6 h-6 text-green-600" />,
-  false: <XCircle className="w-6 h-6 text-red-600" />,
-  unverified: <AlertTriangle className="w-6 h-6 text-yellow-500" />,
+  true: <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-400" />,
+  false: <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />,
+  unverified: <AlertTriangle className="w-6 h-6 text-yellow-500 dark:text-yellow-400" />,
 };
 
 function getConfidence(score) {
@@ -67,8 +69,6 @@ function formatSummaryText(text) {
   return formatted;
 }
 
-// ...existing code...
-
 const Result = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,14 +76,17 @@ const Result = () => {
 
   if (!result) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-        <h2 className="text-2xl font-bold mb-4 text-primary">No result found.</h2>
-        <button
-          className="px-4 py-2 bg-primary text-white rounded-lg"
-          onClick={() => navigate(-1)}
-        >
-          Go Back
-        </button>
+      <div className="h-screen flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center bg-background">
+          <div className="text-center space-y-4">
+            <div className="text-muted-foreground text-lg">No result found. Please go back and verify content.</div>
+            <Button onClick={() => navigate(-1)} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Go Back
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -98,79 +101,162 @@ const Result = () => {
   const claim = result?.text_check?.claim || result?.raw_input;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background print:bg-white print:bg-none print:shadow-none print:border-none">
-      <div className="w-full max-w-4xl p-8 bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-muted flex flex-col gap-6 justify-center items-center transition-all duration-300 print:p-0 print:rounded-none print:shadow-none print:border-none print:bg-none">
-        <h2 className="text-3xl font-bold text-center text-primary mb-2 print:text-black print:mb-4">Verification Result</h2>
-        <div className="flex items-center gap-3 mb-2">
-          {statusIcons[verdict]}
-          <span className="text-xl font-semibold">
-            {verdict === "true" && "VERIFIED AS TRUE"}
-            {verdict === "false" && "VERIFIED AS FALSE"}
-            {verdict === "unverified" && "UNVERIFIED"}
-          </span>
-        </div>
-        <div className="w-full text-left flex flex-col gap-4">
-          <div>
-            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📝 Claim</h3>
-            <div className="text-base text-foreground">{claim}</div>
-          </div>
-          <hr className="my-2 border-muted" />
-          <div>
-            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📊 Confidence</h3>
-            <div className="text-base text-foreground">{confidence} ({(result?.text_check?.confidence_score ?? 0) * 100}%)</div>
-          </div>
-          <hr className="my-2 border-muted" />
-          {reasoning && (
-            <div>
-              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">� Analysis</h3>
-              <div className="text-base text-foreground">{reasoning}</div>
-            </div>
-          )}
-          {reasoning && <hr className="my-2 border-muted" />}
-          {summary && (
-            <div>
-              <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📋 Summary</h3>
-              <div className="text-base text-foreground whitespace-pre-line min-h-[2em]">{summary}</div>
-            </div>
-          )}
-          {summary && <hr className="my-2 border-muted" />}
-          <div>
-            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">�🛠️ Tools Used</h3>
-            <div className="flex flex-wrap gap-2">
-              {tools.map(tool => (
-                <span key={tool} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md text-xs"><Hammer className="w-3 h-3" />{tool}</span>
-              ))}
-            </div>
-          </div>
-          <hr className="my-2 border-muted" />
-          <div>
-            <h3 className="font-semibold text-lg mb-1 text-muted-foreground">📚 Sources</h3>
-            <div className="flex flex-col gap-2">
-              {sources.length > 0 ? sources.map(src => (
-                <div key={src} className="bg-blue-50 dark:bg-blue-900/30 rounded-md px-3 py-2 flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-blue-600 dark:text-blue-300" />
-                  <a href={src} target="_blank" rel="noopener noreferrer" className="text-blue-700 dark:text-blue-200 font-medium break-all hover:underline">
-                    {src}
-                  </a>
-                </div>
-              )) : <span className="text-muted-foreground">No sources found.</span>}
-            </div>
-          </div>
-        </div>
+    <div className="h-screen flex flex-col print:h-auto print:block print:bg-white">
+      <div className="print:hidden">
+        <Header />
       </div>
-      <div className="flex gap-6 mt-4 mb-4">
-        <button
-          className="bg-transparent border-none shadow-none px-0 py-0 text-primary font-semibold cursor-pointer flex items-center gap-2"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeft className="w-5 h-5" /> Go Back
-        </button>
-        <button
-          className="bg-transparent border-none shadow-none px-0 py-0 text-primary font-semibold cursor-pointer print:hidden"
-          onClick={() => window.print()}
-        >
-          🖨️ Print Result
-        </button>
+      
+      <div className="flex-1 bg-gradient-to-br from-background via-background to-muted/20 overflow-auto print:bg-white print:overflow-visible print:p-0" style={{ printColorAdjust: 'exact' }}>
+        <div className="max-w-4xl mx-auto py-8 px-4 print:max-w-none print:mx-0 print:py-4 print:px-6 print:bg-white">
+          {/* Page Header */}
+          <div className="flex items-center gap-3 mb-8 print:mb-6 print:border-b print:border-gray-300 print:pb-4 print:bg-white">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center print:hidden">
+              <BarChart3 className="w-5 h-5 text-primary print:text-gray-700" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground print:text-black print:text-2xl">Verification Result</h1>
+              <p className="text-muted-foreground print:text-gray-600 print:text-sm">Detailed analysis and fact-checking results</p>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-2xl border border-border shadow-lg overflow-hidden print:shadow-none print:border-none print:rounded-none print:bg-white">
+            {/* Status Header */}
+            <div className="bg-gradient-to-r from-card via-card to-muted/20 p-6 border-b border-border print:bg-white print:border-b print:border-gray-300 print:p-4" style={{ printColorAdjust: 'exact' }}>
+              <div className="flex items-center justify-center gap-3 mb-2">
+                {statusIcons[verdict]}
+                <span className="text-xl font-semibold text-foreground print:text-black print:text-lg">
+                  {verdict === "true" && "VERIFIED AS TRUE"}
+                  {verdict === "false" && "VERIFIED AS FALSE"}
+                  {verdict === "unverified" && "UNVERIFIED"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6 print:p-4 print:space-y-4 print:bg-white">
+              {/* Claim */}
+              <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-primary print:text-gray-700" />
+                  <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Claim</h3>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-xl border text-foreground print:bg-white print:border print:border-gray-300 print:rounded print:p-3 print:text-black">
+                  {claim}
+                </div>
+              </div>
+
+              {/* Confidence */}
+              <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary print:text-gray-700" />
+                  <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Confidence</h3>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-xl border print:bg-white print:border print:border-gray-300 print:rounded print:p-3">
+                  <div className="text-base text-foreground print:text-black">
+                    {confidence} ({Math.round((result?.text_check?.confidence_score ?? 0) * 100)}%)
+                  </div>
+                </div>
+              </div>
+
+              {/* Analysis */}
+              {reasoning && (
+                <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-primary print:text-gray-700" />
+                    <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Analysis</h3>
+                  </div>
+                  <div className="bg-muted/50 p-4 rounded-xl border text-foreground print:bg-white print:border print:border-gray-300 print:rounded print:p-3 print:text-black">
+                    {reasoning}
+                  </div>
+                </div>
+              )}
+
+              {/* Summary */}
+              {summary && (
+                <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary print:text-gray-700" />
+                    <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Summary</h3>
+                  </div>
+                  <div className="bg-muted/50 p-4 rounded-xl border print:bg-white print:border print:border-gray-300 print:rounded print:p-3">
+                    <div className="text-base text-foreground whitespace-pre-line min-h-[2em] print:text-black print:min-h-0">
+                      {summary}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tools Used */}
+              <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                <div className="flex items-center gap-2">
+                  <Hammer className="w-5 h-5 text-primary print:text-gray-700" />
+                  <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Tools Used</h3>
+                </div>
+                <div className="flex flex-wrap gap-2 print:gap-1">
+                  {tools.map(tool => (
+                    <span 
+                      key={tool} 
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-md text-sm border border-primary/20 print:bg-white print:text-gray-700 print:border-gray-300 print:px-2 print:py-1 print:text-xs"
+                    >
+                      <Hammer className="w-3 h-3 print:w-2 print:h-2" />
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sources */}
+              <div className="space-y-3 print:space-y-2 print:break-inside-avoid">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-5 h-5 text-primary print:text-gray-700" />
+                  <h3 className="font-semibold text-lg text-foreground print:text-black print:text-base">Sources</h3>
+                </div>
+                <div className="space-y-3 print:space-y-2">
+                  {sources.length > 0 ? sources.map((src, index) => (
+                    <div key={index} className="bg-muted/50 rounded-xl px-4 py-3 border border-border hover:border-border/80 transition-colors print:bg-white print:border print:border-gray-300 print:rounded print:px-3 print:py-2 print:hover:border-gray-300">
+                      <div className="flex items-start gap-2 print:items-start">
+                        <Link2 className="w-4 h-4 text-primary mt-0.5 print:text-gray-700 print:w-3 print:h-3" />
+                        <a 
+                          href={src} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-primary hover:text-primary/80 font-medium break-all hover:underline transition-colors print:text-black print:font-normal print:text-sm print:break-words"
+                        >
+                          {src}
+                        </a>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="bg-muted/50 p-4 rounded-xl border print:bg-white print:border print:border-gray-300 print:rounded print:p-3">
+                      <span className="text-muted-foreground print:text-gray-600">No sources found.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Print Footer with Timestamp */}
+            <div className="hidden print:block print:mt-6 print:pt-4 print:border-t print:border-gray-300">
+              <div className="text-center text-xs text-gray-500">
+                <p>Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+                <p className="mt-1">VeriHub - Fact Verification Platform</p>
+              </div>
+            </div>
+
+            {/* Action Footer */}
+            <div className="bg-muted/30 border-t border-border p-6 print:hidden">
+              <div className="flex items-center justify-center gap-4">
+                <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
+                  <ArrowLeft className="w-4 h-4" />
+                  Go Back
+                </Button>
+                <Button variant="outline" onClick={() => window.print()} className="gap-2">
+                  <FileText className="w-4 h-4" />
+                  Print Result
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
