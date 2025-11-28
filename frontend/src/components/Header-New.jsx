@@ -1,252 +1,121 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { useTheme } from '@/components/theme-provider';
-import {
-  Search,
-  Menu,
-  User,
-  Settings,
-  LogOut,
-  Moon,
-  Sun,
-  Bell,
-  HelpCircle,
-  FileText,
-  MessageSquare,
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Shield, User, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 
-const Header = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+export const Header = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
-  const { theme, setTheme } = useTheme();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
+    const loggedIn = localStorage.getItem("isLoggedIn");
+    if (loggedIn === "true") {
+      setIsLoggedIn(true);
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
     }
   }, []);
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("user");
+    setIsLoggedIn(false);
     setUser(null);
-    navigate("/login");
+    setShowLogoutConfirm(false);
+    navigate("/");
+    toast({ 
+      title: "Logged out", 
+      description: "You have been logged out.", 
+      variant: "default" 
+    });
   };
 
-  const handleThemeToggle = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
   };
-
-  const navigationItems = [
-    {
-      title: 'Chat',
-      href: '/',
-      description: 'AI-powered verification chat',
-      icon: <MessageSquare className="w-4 h-4" />,
-    },
-    {
-      title: 'Documents',
-      href: '/documents',
-      description: 'Manage verification documents',
-      icon: <FileText className="w-4 h-4" />,
-    },
-    {
-      title: 'Help',
-      href: '/help',
-      description: 'Get help and support',
-      icon: <HelpCircle className="w-4 h-4" />,
-    },
-  ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between px-4">
-        {/* Left Section - Logo and Navigation */}
+    <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 shadow-lg">
+      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 bg-white bg-opacity-20 rounded-xl shadow">
+            <Shield className="h-6 w-6 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-white">
+            VeriHub AI
+          </h1>
+        </div>
+        
         <div className="flex items-center gap-4">
-          {/* Mobile Menu */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-              <SheetHeader>
-                <SheetTitle>VeriHub</SheetTitle>
-              </SheetHeader>
-              <div className="grid gap-6 py-6">
-                {navigationItems.map((item) => (
-                  <button
-                    key={item.href}
-                    onClick={() => navigate(item.href)}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors text-left"
-                  >
-                    {item.icon}
-                    <div>
-                      <div className="font-medium">{item.title}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {item.description}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="theme-toggle">Dark Mode</Label>
-                  <Switch
-                    id="theme-toggle"
-                    checked={theme === 'dark'}
-                    onCheckedChange={handleThemeToggle}
-                  />
-                </div>
+          {isLoggedIn && user ? (
+            <>
+              <div className="hidden md:flex items-center gap-2 text-white">
+                <User className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {user.username || user.email}
+                </span>
               </div>
-            </SheetContent>
-          </Sheet>
-
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">V</span>
-            </div>
-            <span className="font-bold text-lg">VeriHub</span>
-            <Badge variant="secondary" className="hidden sm:inline-flex">
-              Beta
-            </Badge>
-          </div>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            {navigationItems.map((item) => (
-              <button
-                key={item.href}
-                onClick={() => navigate(item.href)}
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="border-white text-white bg-white bg-opacity-20 hover:bg-white hover:text-blue-600"
               >
-                {item.icon}
-                {item.title}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Center Section - Search */}
-        <div className="flex-1 max-w-sm mx-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        {/* Right Section - User Actions */}
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle (Desktop) */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleThemeToggle}
-            className="hidden md:inline-flex"
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </Button>
-
-          {/* Notifications */}
-          {user && (
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4 w-4" />
-              <Badge
-                variant="destructive"
-                className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
-              >
-                3
-              </Badge>
-            </Button>
-          )}
-
-          {/* User Menu */}
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder-avatar.jpg" alt={user?.username} />
-                    <AvatarFallback>
-                      {user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.username}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user?.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={() => navigate('/login')}>
-                Sign In
+                <LogOut className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Logout</span>
               </Button>
-              <Button onClick={() => navigate('/signup')}>Sign Up</Button>
-            </div>
+
+              {showLogoutConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+                    <h3 className="text-lg font-medium mb-4">Confirm Logout</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to log out?</p>
+                    <div className="flex gap-3 justify-end">
+                      <Button variant="outline" size="sm" onClick={cancelLogout}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={confirmLogout}>
+                        Logout
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-white text-white bg-white bg-opacity-20 hover:bg-white hover:text-blue-600"
+                onClick={() => navigate("/login")}
+              >
+                Login
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="bg-white text-blue-600 font-medium hover:bg-blue-50"
+                onClick={() => navigate("/signup")}
+              >
+                Sign Up
+              </Button>
+            </>
           )}
         </div>
       </div>
     </header>
   );
 };
-
-export default Header;
