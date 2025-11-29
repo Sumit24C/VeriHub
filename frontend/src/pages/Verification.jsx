@@ -538,7 +538,7 @@ const Verification = () => {
                 {loading || isStreaming ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" /> 
-                    <span>{currentStatus || 'Verifying....'}</span>
+                    <span>{currentStatus || 'Verifying...'}</span>
                   </>
                 ) : (
                   <>
