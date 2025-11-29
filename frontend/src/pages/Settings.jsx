@@ -428,6 +428,92 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
+              {/* What's New */}
+              <Card className="border border-border shadow-lg bg-gradient-to-br from-primary/5 to-secondary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Zap className="w-5 h-5 text-primary" />
+                    What's New
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+                      <Badge variant="default" className="mt-0.5">New</Badge>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm mb-1">Real-time Streaming</h4>
+                        <p className="text-xs text-muted-foreground">Watch verification progress live with step-by-step analysis</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+                      <Badge variant="secondary" className="mt-0.5">v2.0</Badge>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm mb-1">Enhanced UI</h4>
+                        <p className="text-xs text-muted-foreground">Redesigned interface with smooth animations and modern design</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+                      <Badge variant="outline" className="mt-0.5">Update</Badge>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm mb-1">Improved Accuracy</h4>
+                        <p className="text-xs text-muted-foreground">Better fact-checking with advanced AI models</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Help & Support */}
+              <Card className="border border-border shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Shield className="w-5 h-5 text-primary" />
+                    Help & Support
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start gap-2"
+                    onClick={() => window.open('https://github.com/nirajshukla13/verihub', '_blank')}
+                  >
+                    <Globe className="w-4 h-4" />
+                    Visit Documentation
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start gap-2"
+                    onClick={() => window.open('https://github.com/nirajshukla13/verihub/issues', '_blank')}
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Report an Issue
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      const email = "support@verihub.com";
+                      const subject = "VeriHub Support Request";
+                      window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}`;
+                    }}
+                  >
+                    <User className="w-4 h-4" />
+                    Contact Support
+                  </Button>
+                  
+                  <Separator />
+                  
+                  <div className="text-center py-2">
+                    <p className="text-xs text-muted-foreground">VeriHub v2.0</p>
+                    <p className="text-xs text-muted-foreground mt-1">© 2025 All rights reserved</p>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Account Actions */}
               <Card className="border border-border shadow-lg">
                 <CardHeader>

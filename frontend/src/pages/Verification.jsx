@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Loader2, Upload, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, ArrowLeft, Sparkles, Shield } from "lucide-react";
@@ -17,6 +17,8 @@ const Verification = () => {
   const [error, setError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const navigate = useNavigate();
+  const streamingContainerRef = useRef(null);
+  const timelineContainerRef = useRef(null);
 
   const handleTypeChange = (type) => {
     setInputType(type);
@@ -61,6 +63,29 @@ const Verification = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [verificationSteps, setVerificationSteps] = useState([]);
   const [currentProgress, setCurrentProgress] = useState(0);
+  const [showStreamingPanel, setShowStreamingPanel] = useState(false);
+
+  // Auto-scroll timeline to bottom when new steps are added
+  useEffect(() => {
+    if (timelineContainerRef.current && verificationSteps.length > 0) {
+      setTimeout(() => {
+        timelineContainerRef.current?.scrollTo({
+          top: timelineContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
+    }
+  }, [verificationSteps]);
+
+  // Smooth panel appearance
+  useEffect(() => {
+    if (isStreaming) {
+      // Small delay for smooth transition
+      setTimeout(() => setShowStreamingPanel(true), 100);
+    } else if (!streamingResult && verificationSteps.length === 0) {
+      setShowStreamingPanel(false);
+    }
+  }, [isStreaming, streamingResult, verificationSteps]);
 
   // Check if browser supports streaming
   const supportsSSE = () => {
@@ -325,15 +350,17 @@ const Verification = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-accent via-background to-accent/50 py-12 px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-accent via-background to-accent/50 py-12 px-4 relative overflow-hidden flex items-center">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       </div>
 
-      <Card className="max-w-2xl w-full border-border/50 shadow-2xl backdrop-blur-sm bg-card/95 relative z-10">
-        <CardContent className="p-10 md:p-12">
+      <div className={`max-w-7xl w-full mx-auto relative z-10 transition-all duration-700 ease-in-out ${showStreamingPanel ? 'grid grid-cols-1 lg:grid-cols-2 gap-6 items-start' : 'flex justify-center items-center'}`}>
+        {/* Left Side - Input Form */}
+        <Card className={`${showStreamingPanel ? 'w-full' : 'max-w-2xl w-full'} border-border/50 shadow-2xl backdrop-blur-sm bg-card/95 h-fit transition-all duration-700 ease-in-out`}>
+          <CardContent className="p-10 md:p-12">
           {/* Header */}
           <div className="text-center mb-12 space-y-4">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
@@ -518,6 +545,7 @@ const Verification = () => {
                       </div>
                     )}
                     <input
+                      id="image-input"
                       type="file"
                       accept="image/*"
                       className="hidden"
@@ -550,13 +578,37 @@ const Verification = () => {
             </form>
           )}
 
-        {/* Enhanced Streaming Result Display */}
+          {/* Enhanced Error Display */}
+          {error && (
+            <div className="mt-8 flex items-start gap-4 text-destructive bg-destructive/5 border-2 border-destructive/20 px-6 py-5 rounded-xl shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-3 duration-300">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold mb-1">Verification Error</h4>
+                <p className="text-sm opacity-90 leading-relaxed">{error}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Right Side - Enhanced Streaming Result Display */}
+      <div 
+        ref={streamingContainerRef}
+        className={`transform transition-all duration-700 ease-in-out origin-left ${
+          showStreamingPanel 
+            ? 'opacity-100 translate-x-0 scale-100' 
+            : 'opacity-0 translate-x-8 scale-95 pointer-events-none lg:hidden'
+        }`}
+      >
         {(isStreaming || streamingResult || verificationSteps.length > 0) && (
-          <div className="mt-8 relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card/95 to-muted/30 backdrop-blur-sm shadow-xl">
+        <Card className="w-full border-border/50 shadow-2xl backdrop-blur-sm bg-card/95 h-fit lg:sticky lg:top-6">
+          <CardContent className="p-6">
             {/* Animated header gradient */}
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-secondary/5 animate-pulse"></div>
             
-            <div className="relative p-6">
+            <div className="relative">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -631,7 +683,10 @@ const Verification = () => {
                     {/* Timeline line */}
                     <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary via-secondary to-muted rounded-full"></div>
                     
-                    <div className="space-y-4 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                    <div 
+                      ref={timelineContainerRef}
+                      className="space-y-4 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent scroll-smooth"
+                    >
                       {verificationSteps.map((step, index) => (
                         <div key={step.id} className="relative flex items-start gap-4 pl-8">
                           {/* Step indicator */}
@@ -708,23 +763,11 @@ const Verification = () => {
                 </div>
               )}
             </div>
-          </div>
+          </CardContent>
+        </Card>
         )}
-
-        {/* Enhanced Error Display */}
-        {error && (
-          <div className="mt-8 flex items-start gap-4 text-destructive bg-destructive/5 border-2 border-destructive/20 px-6 py-5 rounded-xl shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-3 duration-300">
-            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-semibold mb-1">Verification Error</h4>
-              <p className="text-sm opacity-90 leading-relaxed">{error}</p>
-            </div>
-          </div>
-        )}
-        </CardContent>
-      </Card>
+      </div>
+      </div>
     </div>
   );
 };

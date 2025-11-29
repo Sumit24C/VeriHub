@@ -3,6 +3,8 @@
 **AI-Powered Media Verification System**  
 Team Size: 4 | Hackathon MVP
 
+![](frontend/public/coding.gif)
+
 ---
 
 ## Overview
